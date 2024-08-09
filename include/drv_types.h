@@ -2230,4 +2230,8 @@ int rtw_suspend_free_assoc_resource(_adapter *padapter);
 	#include <pci_hal.h>
 #endif
 
+// OpenHD crda workaround
+int get_openhd_override_channel(void);
+int get_openhd_override_tx_power_mbm(void);
+
 #endif /* __DRV_TYPES_H__ */
