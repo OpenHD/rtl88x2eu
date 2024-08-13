@@ -69,8 +69,8 @@ CONFIG_PCI_HCI = n
 CONFIG_SDIO_HCI = n
 CONFIG_GSPI_HCI = n
 ########################## Features ###########################
-CONFIG_AP_MODE = y
-CONFIG_P2P = y
+CONFIG_AP_MODE = n
+CONFIG_P2P = n
 CONFIG_MP_INCLUDED = y
 CONFIG_POWER_SAVING = n
 CONFIG_IPS_MODE = 0
