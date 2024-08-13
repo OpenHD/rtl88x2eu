@@ -26,6 +26,7 @@ if [[ -e /etc/os-release && $(grep -c "Raspbian" /etc/os-release) -gt 0 ]]; then
     sudo apt install -y build-essential flex bc bison dkms raspberrypi-kernel-headers
     echo "---------------"
     echo "_____________________________________________"
+    make KSRC=/usr/src/linux-headers-6.1.21-v7l+ O="" modules
     ls -a /usr/src/
 elif [[ "$(lsb_release -cs)" == "noble" ]]; then 
     echo "building for ubuntu noble minimal"
