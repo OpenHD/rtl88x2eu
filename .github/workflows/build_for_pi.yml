@@ -32,7 +32,7 @@ jobs:
         run: |
           git clone https://github.com/OpenHD/ChrootCompilationTest /opt/ChrootCompilationTest
           mkdir -p /opt/ChrootCompilationTest/additionalFiles
-          git clone https://github.com/OpenHD/rtl8812au -b ${{ github.ref_name }} /opt/ChrootCompilationTest/additionalFiles/ --recursive
+          git clone https://github.com/OpenHD/rtl88x2eu -b ${{ github.ref_name }} /opt/ChrootCompilationTest/additionalFiles/ --recursive
           echo $CLOUDSMITH_API_KEY > /opt/ChrootCompilationTest/additionalFiles/cloudsmith_api_key.txt
           echo "armhf" > /opt/ChrootCompilationTest/additionalFiles/arch.txt
           echo "debian" > /opt/ChrootCompilationTest/additionalFiles/distro.txt
