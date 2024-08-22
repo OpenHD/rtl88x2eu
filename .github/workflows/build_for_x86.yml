@@ -1,0 +1,60 @@
+name: build on x86 lunar
+
+on: [push]
+
+
+jobs:
+  build:
+    #runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
+    env:
+      CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+    steps:
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 512
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          overprovision-lvm: 'true'
+      - name: remove even more
+        run: |
+          sudo apt-get purge -y \
+            '^llvm-.*' \
+            'php.*' \
+            '^mongodb-.*' \
+            '^mysql-.*' \
+            azure-cli \
+            google-chrome-stable \
+            firefox \
+            powershell \
+            microsoft-edge-stable \
+            mono-devel
+          sudo apt-get autoremove -y
+          sudo apt-get clean
+      - name: test
+        run: |
+          echo "DT=$(date +'%Y-%m-%d_%H%M')" >> $GITHUB_ENV
+          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV    
+             
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Building OpenHD in CHROOT
+        run: |
+          git clone https://github.com/OpenHD/OpenHD-ChrootCompiler /opt/OpenHD-ChrootCompiler
+          mkdir -p /opt/OpenHD-ChrootCompiler/additionalFiles
+          git clone https://github.com/OpenHD/rtl88x2eu -b ${{ github.ref_name }} /opt/OpenHD-ChrootCompiler/additionalFiles/ --recursive
+          echo $CLOUDSMITH_API_KEY > /opt/OpenHD-ChrootCompiler/additionalFiles/cloudsmith_api_key.txt
+          echo "AMD64" > /opt/OpenHD-ChrootCompiler/additionalFiles/arch.txt
+          echo "ubuntu" > /opt/OpenHD-ChrootCompiler/additionalFiles/distro.txt
+          echo "lunar" > /opt/OpenHD-ChrootCompiler/additionalFiles/flavor.txt
+          echo "${{ github.ref_name }}" > /opt/OpenHD-ChrootCompiler/additionalFiles/repo.txt
+
+          cd /opt/OpenHD-ChrootCompiler/
+          sudo apt update
+          sudo bash install_dep.sh
+          sudo bash ./build.sh x86-lunar $API_KEY ubuntu lunar

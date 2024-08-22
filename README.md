@@ -69,23 +69,22 @@ That's because:
 3. If the monitor mode is set by ```iwconfig```, the process is done by calling the old WEXT APIs, so the cfg80211-based ```iw``` may not get the latest status and think the interface is still in managed mode
 
 ### AP/STA
-Note that it has NOT BEEN TESTED.  
+It's currently under testing by a Chinese enthusiast, will update here if he has any progress.  
 According to the module vendor's ambiguous document and the crab's mysterious driver tar with a "_10MHz" suffix:  
 1. Enable ```CONFIG_NARROWBAND_SUPPORTING``` in ```include/hal_ic_cfg.h``` (in ```#ifdef CONFIG_RTL8822E``` section if using RTL8812EU), then ```#define CONFIG_NB_VALUE RTW_NB_CONFIG_WIDTH_10``` below
 2. Rename ```hal/rtl8822e/hal8822e_fw_10M.*``` into ```hal/rtl8822e/hal8822e_fw.*``` to replace the original firmware
 3. Now you get the "<tar_name>_10MHz" driver. Rebuild the driver
-4. (Should we set it to 10MHz bandwidth, Mr. Crab?)
+4. ```iw``` Set the channel to 10MHz bandwidth
 5. If there are any tools complain about the Wi-Fi regularities when setting up a 10MHz AP,  try setting the channel plan manually by ```echo 0x3E > /proc/net/rtl88x2eu/<wlan>/chan_plan```.
+6. Check the ACK timeout setting below if the range is >\~3km
+7. Check ```/proc/net/rtl88x2eu/<wlan>/rate_ctl``` for manually control of the rate
 
 ### Is Injecting in Other Bandwidth Available?
 #### 5MHz
 No. It performs like a fractional RF synthesizer with only a single tone appearing on my SDR receiver.
-#### 40MHz
+#### 40MHz/80MHz
 It works.   
-Use ```iw``` to set channel & HT40 bandwidth, then set 40MHz in radiotap header (can be done by using ```-B 40``` in wfb-ng, or editing ```/etc/wfb.conf``` in OpenIPC FPV)   
-#### 80MHz
-~~Wake me up when ```wfb-ng``` supports VHT rates.~~  
-OK I did that. See [here](https://github.com/libc0607/wfb-ng/commit/f7c8ea78dd8c8495bb22f184fcfd77152b25798a).  
+Use ```iw``` to set channel & HT40/80MHz bandwidth, then set 40MHz or 80MHz(VHT) in radiotap header (can be done by using ```-B``` in wfb-ng)   
 
 ## Set (Unlocked) Channel in procfs  
 The chip's RF synthesizer can work in a bit wider range than regular 5GHz Wi-Fi.  
@@ -115,14 +114,14 @@ The value you're setting is L2H. The H2L is automatically set 8dB lower.
 
 DISCLAIMER: There's no guarantee of its performance. This may damage your hardware and I'm not gonna pay for it. Use it at your own risk. Please comply with any wireless regulations in your area.  
 
-## 802.11 DCF hacking   
-Note: I don't know if these things are actually working since no one can get the crab's datasheets.  
-Just did some global searching and replaced every place I've found.  
-
-### ACK Timeout 
+## ACK Timeout 
 Provided by Realtek.
 e.g. Set ACK timeout to 100us:  
 ```echo 100 > /proc/net/rtl88x2eu/<wlanX>/ack_timeout```  
+
+## 802.11 DCF hacking   
+Note: I don't know if these things are actually working since no one can get the crab's datasheets.  
+Just did some global searching and replaced every place I've found.  
 
 ### SIFS
 EXPERIMENTAL, may not work.  
@@ -136,8 +135,20 @@ DISCLAIMER: There's no guarantee of its performance.
 
 ## Noise Monitor 
 Not working. Enabled every macro (like ```CONFIG_BACKGROUND_NOISE_MONITOR```) I could find and the readouts kept zero.  
-If you know something about it, please tell us in issue.
+If you know something about it, please tell us in issue.  
+
+## Thermometer  
+The chip contains a thermometer for calibrating the RF part dynamically. It can be used to estimate the chip temperature.  
+e.g. To read the temperature:  
+```
+cat /proc/net/rtl88x2eu/<wlan0>/thermal_state 
+```
+Note: This value is not accurate enough. The LSB of its ADC only represents 2.5K and contains a measured value as the offset.   
+However, it can be used to estimate the status of the chip, "cool/warm/hot/smoked/crispy".  
+See [PR #4](https://github.com/libc0607/rtl88x2eu-20230815/pull/4) and [commit/5b7a66d](https://github.com/libc0607/rtl88x2eu-20230815/commit/5b7a66d3b1c7097a02247f91253993a7027e40a6#comments) for more details.  
+The offset can be tuned by ```echo "<offset>" > /proc/net/rtl88x2eu/<wlan0>/thermal_state```. By default, it's ```32```, based on my measurement.  
 
 ## Use with OpenIPC  
-See the tutorial [here in OpenIPC Wiki](https://github.com/OpenIPC/wiki/blob/master/en/fpv-bl-m8812eu2-wifi-adaptors.md).   
+See the tutorial [here in OpenIPC Wiki](https://github.com/OpenIPC/wiki/blob/master/en/fpv-bl-m8812eu2-wifi-adaptors.md).  
+Or, download pre-built firmware with this driver from [here](https://github.com/libc0607/openipc-firmware).
 

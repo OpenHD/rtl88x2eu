@@ -69,8 +69,8 @@ CONFIG_PCI_HCI = n
 CONFIG_SDIO_HCI = n
 CONFIG_GSPI_HCI = n
 ########################## Features ###########################
-CONFIG_AP_MODE = y
-CONFIG_P2P = y
+CONFIG_AP_MODE = n
+CONFIG_P2P = n
 CONFIG_MP_INCLUDED = y
 CONFIG_POWER_SAVING = n
 CONFIG_IPS_MODE = 0
@@ -168,6 +168,7 @@ CONFIG_SECURE_DMA_MEM_SIZE = 3686400
 ###################### Platform Related #######################
 CONFIG_PLATFORM_I386_PC = y
 CONFIG_PLATFORM_ARM_GENERIC = n
+CONFIG_PLATFORM_ARM_RPI = n
 CONFIG_PLATFORM_ARM64 = n
 CONFIG_PLATFORM_ARM64_RPI = n
 CONFIG_PLATFORM_ANDROID_X86 = n
@@ -1058,9 +1059,9 @@ ifeq ($(CONFIG_RTL8822E), y)
 RTL871X := rtl8822e
 ifeq ($(CONFIG_USB_HCI), y)
 ifeq ($(CONFIG_BT_COEXIST), n)
-MODULE_NAME = 8812eu
+MODULE_NAME = 88x2eu_ohd
 else
-MODULE_NAME = 88x2eu
+MODULE_NAME = 88x2eu_ohd
 endif
 endif
 ifeq ($(CONFIG_PCI_HCI), y)
@@ -1417,6 +1418,17 @@ KSRC := /lib/modules/$(KVER)/build
 MODDESTDIR := /lib/modules/$(KVER)/kernel/drivers/net/wireless/
 INSTALL_PREFIX :=
 STAGINGMODDIR := /lib/modules/$(KVER)/kernel/drivers/staging
+endif
+
+ifeq ($(CONFIG_PLATFORM_ARM_RPI), y)
+EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN
+EXTRA_CFLAGS += -DCONFIG_IOCTL_CFG80211 -DRTW_USE_CFG80211_STA_EVENT
+ARCH ?= arm
+CROSS_COMPILE ?=
+KVER ?= $(shell uname -r)
+KSRC := /lib/modules/$(KVER)/build
+MODDESTDIR := /lib/modules/$(KVER)/kernel/drivers/net/wireless/
+INSTALL_PREFIX :=
 endif
 
 ifeq ($(CONFIG_PLATFORM_ARM_GENERIC), y)
