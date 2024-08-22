@@ -32,7 +32,7 @@ jobs:
         run: |
           git clone https://github.com/OpenHD/OpenHD-ChrootCompiler /opt/OpenHD-ChrootCompiler
           mkdir -p /opt/OpenHD-ChrootCompiler/additionalFiles
-          git clone https://github.com/OpenHD/rtl88x2eu -b ${{ github.ref_name }} /opt/ChrootCompilationTest/additionalFiles/ --recursive
+          git clone https://github.com/OpenHD/rtl88x2eu /opt/ChrootCompilationTest/additionalFiles/ --recursive
           chmod +x /opt/ChrootCompilationTest/additionalFiles/build_chroot.sh
           echo $CLOUDSMITH_API_KEY > /opt/OpenHD-ChrootCompiler/additionalFiles/cloudsmith_api_key.txt
           echo "AMD64" > /opt/OpenHD-ChrootCompiler/additionalFiles/arch.txt
