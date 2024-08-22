@@ -28,12 +28,11 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: recursive
-      - name: Building OpenHD in CHROOT
+     - name: Building OpenHD in CHROOT
         run: |
           git clone https://github.com/OpenHD/OpenHD-ChrootCompiler /opt/OpenHD-ChrootCompiler
           mkdir -p /opt/OpenHD-ChrootCompiler/additionalFiles
           git clone https://github.com/OpenHD/rtl88x2eu /opt/OpenHD-ChrootCompiler/additionalFiles/ --recursive
-          chmod +x /opt/ChrootCompilationTest/additionalFiles/build_chroot.sh
           echo $CLOUDSMITH_API_KEY > /opt/OpenHD-ChrootCompiler/additionalFiles/cloudsmith_api_key.txt
           echo "AMD64" > /opt/OpenHD-ChrootCompiler/additionalFiles/arch.txt
           echo "ubuntu" > /opt/OpenHD-ChrootCompiler/additionalFiles/distro.txt
@@ -43,33 +42,4 @@ jobs:
           cd /opt/OpenHD-ChrootCompiler/
           sudo apt update
           sudo bash install_dep.sh
-          sudo bash ./build.sh x86-minimal $API_KEY ubuntu noble
-      
-      - name: debug
-        run: |
-          ls -a
-          cp -r /opt/OpenHD-ChrootCompiler/out/*.deb .
-
-      
-      - name: Upload to Github
-        uses: 'actions/upload-artifact@v2'
-        with:
-          name: "rtl8812au"
-          path: |
-            *.deb
-            *.log
-          if-no-files-found: error
-
-      - name: Push
-        id: push
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "deb"
-          owner: "openhd"
-          repo: release
-          distro: "ubuntu"
-          release: "noble"
-          republish: "true" # needed ONLY if version is not changing
-          file: "*.deb"
+          sudo bash ./build.sh x86-noble $API_KEY ubuntu noble
