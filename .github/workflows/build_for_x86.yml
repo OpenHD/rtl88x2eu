@@ -48,6 +48,7 @@ jobs:
           git clone https://github.com/OpenHD/OpenHD-ChrootCompiler /opt/OpenHD-ChrootCompiler
           mkdir -p /opt/OpenHD-ChrootCompiler/additionalFiles
           git clone https://github.com/OpenHD/rtl88x2eu -b ${{ github.ref_name }} /opt/ChrootCompilationTest/additionalFiles/ --recursive
+          ls -a /opt/ChrootCompilationTest/additionalFiles/
           echo $CLOUDSMITH_API_KEY > /opt/OpenHD-ChrootCompiler/additionalFiles/cloudsmith_api_key.txt
           echo "AMD64" > /opt/OpenHD-ChrootCompiler/additionalFiles/arch.txt
           echo "ubuntu" > /opt/OpenHD-ChrootCompiler/additionalFiles/distro.txt
