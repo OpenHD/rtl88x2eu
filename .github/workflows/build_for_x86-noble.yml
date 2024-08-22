@@ -42,4 +42,4 @@ jobs:
           cd /opt/OpenHD-ChrootCompiler/
           sudo apt update
           sudo bash install_dep.sh
-          sudo bash ./build.sh x86-noble $API_KEY ubuntu noble
+          sudo bash ./build.sh x86-minimal $API_KEY ubuntu noble
