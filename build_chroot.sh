@@ -30,10 +30,11 @@ if [[ -e /etc/os-release && $(grep -c "Raspbian" /etc/os-release) -gt 0 ]]; then
     make KSRC=/usr/src/linux-headers-6.1.21-v7l+ O="" modules
     ls -a /usr/src/
 elif [[ "$(lsb_release -cs)" == "noble" ]]; then 
+    ls -a /usr/src/
     echo "building for ubuntu noble minimal"
     sudo apt update 
     sudo apt install -y build-essential flex bc bison dkms
-    make KSRC=/usr/src/linux-headers-6.1.21-v7l+ O="" modules
+    make KSRC=/usr/src/linux-headers-6.8.0-31-generic O="" modules
     mkdir -p package/lib/modules/6.8.0-31-generic/kernel/drivers/net/wireless/
     cp *.ko package/lib/modules/6.8.0-31-generic/kernel/drivers/net/wireless/
     ls -a
