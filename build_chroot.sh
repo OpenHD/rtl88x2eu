@@ -3,6 +3,7 @@
 # We're using cloudsmith-cli to upload the file in CHROOT
 
 mkdir -p /out
+sudo apt update
 sudo apt install -y python3-pip ruby ruby-dev rubygems build-essential
 pip3 install --upgrade pip
 gem install fpm
