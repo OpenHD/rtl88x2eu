@@ -29,17 +29,17 @@ jobs:
         with:
           submodules: recursive
       - name: Building OpenHD in CHROOT
-          run: |
-            git clone https://github.com/OpenHD/OpenHD-ChrootCompiler /opt/OpenHD-ChrootCompiler
-            mkdir -p /opt/OpenHD-ChrootCompiler/additionalFiles
-            git clone https://github.com/OpenHD/rtl88x2eu /opt/OpenHD-ChrootCompiler/additionalFiles/ --recursive
-            echo $CLOUDSMITH_API_KEY > /opt/OpenHD-ChrootCompiler/additionalFiles/cloudsmith_api_key.txt
-            echo "AMD64" > /opt/OpenHD-ChrootCompiler/additionalFiles/arch.txt
-            echo "ubuntu" > /opt/OpenHD-ChrootCompiler/additionalFiles/distro.txt
-            echo "noble" > /opt/OpenHD-ChrootCompiler/additionalFiles/flavor.txt
-            echo "${{ github.ref_name }}" > /opt/OpenHD-ChrootCompiler/additionalFiles/repo.txt
+        run: |
+          git clone https://github.com/OpenHD/OpenHD-ChrootCompiler /opt/OpenHD-ChrootCompiler
+          mkdir -p /opt/OpenHD-ChrootCompiler/additionalFiles
+          git clone https://github.com/OpenHD/rtl88x2eu /opt/OpenHD-ChrootCompiler/additionalFiles/ --recursive
+          echo $CLOUDSMITH_API_KEY > /opt/OpenHD-ChrootCompiler/additionalFiles/cloudsmith_api_key.txt
+          echo "AMD64" > /opt/OpenHD-ChrootCompiler/additionalFiles/arch.txt
+          echo "ubuntu" > /opt/OpenHD-ChrootCompiler/additionalFiles/distro.txt
+          echo "noble" > /opt/OpenHD-ChrootCompiler/additionalFiles/flavor.txt
+          echo "${{ github.ref_name }}" > /opt/OpenHD-ChrootCompiler/additionalFiles/repo.txt
 
-            cd /opt/OpenHD-ChrootCompiler/
-            sudo apt update
-            sudo bash install_dep.sh
-            sudo bash ./build.sh x86-noble $API_KEY ubuntu noble
+          cd /opt/OpenHD-ChrootCompiler/
+          sudo apt update
+          sudo bash install_dep.sh
+          sudo bash ./build.sh x86-noble $API_KEY ubuntu noble
