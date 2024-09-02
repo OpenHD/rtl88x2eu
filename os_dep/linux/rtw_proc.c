@@ -5982,12 +5982,167 @@ static ssize_t proc_set_amsdu_mode(struct file *file, const char __user *buffer,
 
 }
 
+static int proc_get_dis_cca(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct registry_priv	*pregpriv = &padapter->registrypriv;
+	struct dm_struct *dm;
+	u32 bit_dis_cca;
+	
+	if (!padapter)
+		return -EFAULT;
+		
+	dm = adapter_to_phydm(padapter);
+
+	bit_dis_cca = odm_get_mac_reg(dm, R_0x520, BIT(15));
+	
+	RTW_PRINT_SEL(m, "BIT_DIS_EDCCA = %d, CCA %s\n", bit_dis_cca, bit_dis_cca? "disabled": "enabled");
+
+	return 0;
+}
+
+static ssize_t proc_set_dis_cca(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct registry_priv	*pregpriv = &padapter->registrypriv;
+	struct dm_struct *dm;
+	dm = adapter_to_phydm(padapter);
+	
+	char tmp[32];
+	u32 en;
+
+	if (!padapter)
+		return -EFAULT;
+		
+	if (count < 1) {
+		RTW_INFO("Set dis_cca Argument error.\n");
+		return -EFAULT;
+	}
+
+	if (count > sizeof(tmp)) {
+		rtw_warn_on(1);
+		return -EFAULT;
+	}
+
+	if (buffer && !copy_from_user(tmp, buffer, count)) {
+		int num = sscanf(tmp, "%u", &en);
+		if (num < 1)
+			return count;
+	}
+	
+	if (en != 0 && en != 1) {
+		RTW_INFO("Set dis_cca Argument range error.\n");
+		return -EFAULT;
+	}
+	
+	if (en == 1) {
+		// mac bit_dis_edcca 
+		odm_set_mac_reg(dm, R_0x520, BIT(15), 1);
+		// mac bit_edcca_msk_countdown
+		odm_set_mac_reg(dm, R_0x524, BIT(11), 0);
+		// bb cck cca
+		odm_set_bb_reg(dm, R_0x1a9c, BIT(20), 0x0);
+		odm_set_bb_reg(dm, R_0x1a14, 0x300, 0x3);
+		// bb ofdm cca 
+		odm_set_bb_reg(dm, R_0x1d58, 0xff8, 0x1ff);	
+	} else {
+		// mac bit_dis_edcca 
+		odm_set_mac_reg(dm, R_0x520, BIT(15), 0);
+		// mac bit_edcca_msk_countdown
+		odm_set_mac_reg(dm, R_0x524, BIT(11), 1);
+		// bb cck cca
+		odm_set_bb_reg(dm, R_0x1a9c, BIT(20), 0x1);
+		odm_set_bb_reg(dm, R_0x1a14, 0x300, 0x0);
+		// bb ofdm cca
+		odm_set_bb_reg(dm, R_0x1d58, 0xff8, 0x0);
+	}
+	
+
+	RTW_INFO("Write to dis_cca: %d, %s cca\n", en, (en==1)? "disabled": "enabled");
+
+	return count;
+}
+
+static int proc_get_single_tone(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct registry_priv	*pregpriv = &padapter->registrypriv;
+	struct dm_struct *dm;
+	u32 bit_dis_cca;
+	
+	if (!padapter)
+		return -EFAULT;
+		
+	dm = adapter_to_phydm(padapter);
+
+	
+	RTW_PRINT_SEL(m, "single_tone: <en:0(dis)/1(en)> <rf_path:0(A)/1(B)/4(AB)>\n");
+
+	return 0;
+}
+
+static ssize_t proc_set_single_tone(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct registry_priv	*pregpriv = &padapter->registrypriv;
+	struct dm_struct *dm;
+	dm = adapter_to_phydm(padapter);
+	
+	char tmp[32];
+	u32 en, rf_path;
+
+	if (!padapter)
+		return -EFAULT;
+		
+	if (count < 2) {
+		RTW_INFO("Set single_tone Argument error.\n");
+		return -EFAULT;
+	}
+
+	if (count > sizeof(tmp)) {
+		rtw_warn_on(1);
+		return -EFAULT;
+	}
+
+	if (buffer && !copy_from_user(tmp, buffer, count)) {
+		int num = sscanf(tmp, "%u %u", &en, &rf_path);
+		if (num < 1)
+			return count;
+	}
+	
+	if (rf_path != RF_PATH_A && rf_path != RF_PATH_B && rf_path != RF_PATH_AB) {
+		RTW_INFO("Set single_tone rf_path Argument range error.\n");
+		return -EFAULT;
+	}
+	
+	if (en != 0 && en != 1) {
+		RTW_INFO("Set single_tone en Argument range error.\n");
+		return -EFAULT;
+	}
+	
+	if (en == 1) {
+		phydm_mp_set_single_tone(dm, true, rf_path);
+	} else {
+		phydm_mp_set_single_tone(dm, false, rf_path);
+	}
+	
+	RTW_INFO("Write to single_tone: en %d, path %d\n", en, rf_path);
+
+	return count;
+}
+
 /*
 * rtw_adapter_proc:
 * init/deinit when register/unregister net_device
 */
 const struct rtw_proc_hdl adapter_proc_hdls[] = {
         RTW_PROC_HDL_SSEQ("thermal_state", proc_get_thermal_state, proc_set_thermal_state),
+        RTW_PROC_HDL_SSEQ("dis_cca", proc_get_dis_cca, proc_set_dis_cca),
+        RTW_PROC_HDL_SSEQ("single_tone", proc_get_single_tone, proc_set_single_tone),
 #if RTW_SEQ_FILE_TEST
 	RTW_PROC_HDL_SEQ("seq_file_test", &seq_file_test, NULL),
 #endif
