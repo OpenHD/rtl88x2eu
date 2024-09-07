@@ -14,6 +14,7 @@ EXTRA_CFLAGS += -Wno-unused-parameter
 EXTRA_CFLAGS += -Wno-unused-function
 EXTRA_CFLAGS += -Wno-unused
 EXTRA_CFLAGS += -Wno-uninitialized
+EXTRA_CFLAGS += -Werror=declaration-after-statement 
 
 # Let the OS decide the regd instead of phy "self-managed"
 EXTRA_CFLAGS += -DCONFIG_REGD_SRC_FROM_OS
