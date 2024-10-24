@@ -4865,7 +4865,7 @@ static int cfg80211_rtw_set_txpower(struct wiphy *wiphy,
 	}
 // OpenHD
 #if 1
-    openhd_override_tx_power_mbm=get_openhd_override_tx_power_mbm();
+    // openhd_override_tx_power_mbm=get_openhd_override_tx_power_mbm();
     if(openhd_override_tx_power_mbm){
         // wiphy_data->txpwr_total_lmt_mbm = UNSPECIFIED_MBM;
         // wiphy_data->txpwr_total_target_mbm= openhd_override_tx_power_mbm;
@@ -4878,7 +4878,7 @@ static int cfg80211_rtw_set_txpower(struct wiphy *wiphy,
         openhd_override_tx_power_mbm);
 
 	if (ret == 0)
-		rtw_run_in_thread_cmd_wait(adapter, ((void *)(rtw_update_txpwr_level_all_hwband)), adapter_to_dvobj(adapter), 2000);
+		// rtw_run_in_thread_cmd_wait(adapter, ((void *)(rtw_update_txpwr_level_all_hwband)), adapter_to_dvobj(adapter), 2000);
 
 exit:
 	return ret;
