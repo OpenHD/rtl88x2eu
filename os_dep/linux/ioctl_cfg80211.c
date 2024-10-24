@@ -4864,8 +4864,8 @@ static int cfg80211_rtw_set_txpower(struct wiphy *wiphy,
 		RTW_WARN(FUNC_WIPHY_FMT" unknown type:%d\n", FUNC_WIPHY_ARG(wiphy), type);
 	}
 // OpenHD
-#if 0
-    openhd_override_tx_power_mbm=get_openhd_override_tx_power_mbm();
+#if 1
+    openhd_override_tx_power_mbm="1";
     if(openhd_override_tx_power_mbm){
         wiphy_data->txpwr_total_lmt_mbm = UNSPECIFIED_MBM;
         wiphy_data->txpwr_total_target_mbm= openhd_override_tx_power_mbm;
