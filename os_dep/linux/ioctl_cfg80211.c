@@ -4863,26 +4863,32 @@ static int cfg80211_rtw_set_txpower(struct wiphy *wiphy,
 	default:
 		RTW_WARN(FUNC_WIPHY_FMT" unknown type:%d\n", FUNC_WIPHY_ARG(wiphy), type);
 	}
-
+// OpenHD
+#if 1
 	openhd_override_tx_power_mbm = get_openhd_override_tx_power_mbm();
+	RTW_WARN("openhd_override_tx_power_mbm returned: %d\n", openhd_override_tx_power_mbm);
+
+	// Log the current power settings without modifying them
+	RTW_WARN("Current values before override attempt: txpwr_total_lmt_mbm: %d, txpwr_total_target_mbm: %d\n", 
+		wiphy_data->txpwr_total_lmt_mbm, wiphy_data->txpwr_total_target_mbm);
+
+	// Log the intention to use OpenHD value but do not actually set it
 	if (openhd_override_tx_power_mbm) {
-		// wiphy_data->txpwr_total_lmt_mbm = UNSPECIFIED_MBM;
-		// wiphy_data->txpwr_total_target_mbm = openhd_override_tx_power_mbm;
-		// If the chip cannot do the requested tx power, the driver just seems to set tx power index 63
-		RTW_WARN("Using openhd_override_tx_power_mbm %d", openhd_override_tx_power_mbm);
+		RTW_WARN("Would use openhd_override_tx_power_mbm %d, but not applying it in this debug version.\n", openhd_override_tx_power_mbm);
 	}
 
-	RTW_WARN(FUNC_WIPHY_FMT " OpenHD cf80211 tx power %s txpwr_total_lmt_mbm:%d txpwr_total_target_mbm:%d openhd_override_tx_power_mbm:%d\n", 
+	// Log the power settings after the (non-)operation
+	RTW_WARN(FUNC_WIPHY_FMT " OpenHD cfg80211 tx power %s txpwr_total_lmt_mbm: %d txpwr_total_target_mbm: %d openhd_override_tx_power_mbm: %d\n", 
 		FUNC_WIPHY_ARG(wiphy), nl80211_tx_power_setting_str(type), 
 		wiphy_data->txpwr_total_lmt_mbm, wiphy_data->txpwr_total_target_mbm, openhd_override_tx_power_mbm);
 
-	if (ret == 0)
-		// rtw_run_in_thread_cmd_wait(adapter, ((void *)(rtw_update_txpwr_level_all_hwband)), adapter_to_dvobj(adapter), 2000);
+	// Optionally keep or remove this, depending on whether you want to actually invoke the thread
+	// if (ret == 0)
+	//     rtw_run_in_thread_cmd_wait(adapter, ((void *)(rtw_update_txpwr_level_all_hwband)), adapter_to_dvobj(adapter), 2000);
 
 	exit:
 		return ret;
-
-
+endif
 static int cfg80211_rtw_get_txpower(struct wiphy *wiphy,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
 	struct wireless_dev *wdev,
