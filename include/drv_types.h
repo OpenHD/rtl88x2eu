@@ -2232,6 +2232,7 @@ int rtw_suspend_free_assoc_resource(_adapter *padapter);
 
 // OpenHD crda workaround
 int get_openhd_override_channel(void);
-int get_openhd_override_tx_power_mbm(void);
+int get_openhd_override_channel_width(void);
+int get_openhd_override_tx_power_index(void);
 
 #endif /* __DRV_TYPES_H__ */
