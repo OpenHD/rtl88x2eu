@@ -4867,8 +4867,8 @@ static int cfg80211_rtw_set_txpower(struct wiphy *wiphy,
 #if 1
     openhd_override_tx_power_mbm=get_openhd_override_tx_power_mbm();
     if(openhd_override_tx_power_mbm){
-        wiphy_data->txpwr_total_lmt_mbm = UNSPECIFIED_MBM;
-        wiphy_data->txpwr_total_target_mbm= openhd_override_tx_power_mbm;
+        // wiphy_data->txpwr_total_lmt_mbm = UNSPECIFIED_MBM;
+        // wiphy_data->txpwr_total_target_mbm= openhd_override_tx_power_mbm;
         // If the chip cannot do the requested tx power, the driver just seems to set tx power index 63"
         RTW_WARN("Using openhd_override_tx_power_mbm %d",openhd_override_tx_power_mbm);
     }
