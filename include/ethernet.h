@@ -21,7 +21,7 @@
 #define LLC_HEADER_SIZE						6		/* !< LLC Header Length */
 #define TYPE_LENGTH_FIELD_SIZE				2		/* !< Type/Length Size */
 #define MINIMUM_ETHERNET_PACKET_SIZE		60		/* !< Minimum Ethernet Packet Size */
-#define MAXIMUM_ETHERNET_PACKET_SIZE		1514	/* !< Maximum Ethernet Packet Size */
+#define MAXIMUM_ETHERNET_PACKET_SIZE		8192	/* !< Maximum Ethernet Packet Size */
 
 #define RT_ETH_IS_MULTICAST(_pAddr)	((((u8 *)(_pAddr))[0]&0x01) != 0)		/* !< Is Multicast Address? */
 #define RT_ETH_IS_BROADCAST(_pAddr)	(\
