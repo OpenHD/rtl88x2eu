@@ -1147,6 +1147,9 @@ static void rtw_regsty_load_tx_ac_lifetime(struct registry_priv *regsty)
 int openhd_override_channel = 0;
 module_param(openhd_override_channel, int, 0644);
 MODULE_PARM_DESC(openhd_override_channel, "OpenHD easy (CRDA workaround)");
+int openhd_override_channel_width = 0;
+module_param(openhd_override_channel_width, int, 0644);
+MODULE_PARM_DESC(openhd_override_channel_width, "OpenHD easy (CRDA workaround)");
 int openhd_override_tx_power_mbm = 0;
 module_param(openhd_override_tx_power_mbm, int, 0644);
 MODULE_PARM_DESC(openhd_override_tx_power_mbm, "OpenHD easy (CRDA workaround)");
@@ -5999,6 +6002,9 @@ EXPORT_SYMBOL(rtw_vendor_ie_set_api);
 
 int get_openhd_override_channel(void){
     return openhd_override_channel;
+}
+int get_openhd_override_channel_width(void){
+    return openhd_override_channel_width;
 }
 int get_openhd_override_tx_power_mbm(void){
     return openhd_override_tx_power_mbm;

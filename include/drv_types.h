@@ -411,6 +411,9 @@ struct registry_priv {
 #endif
 	u8	RegEnableTxPowerByRate;
 
+	int32_t openhd_override_channel;
+	int32_t openhd_override_channel_width;
+
 	u8 target_tx_pwr_valid;
 	s8 target_tx_pwr_2g[RF_PATH_MAX][RATE_SECTION_NUM];
 #if CONFIG_IEEE80211_BAND_5GHZ
@@ -2232,6 +2235,7 @@ int rtw_suspend_free_assoc_resource(_adapter *padapter);
 
 // OpenHD crda workaround
 int get_openhd_override_channel(void);
+int get_openhd_override_channel_width(void);
 int get_openhd_override_tx_power_mbm(void);
 
 #endif /* __DRV_TYPES_H__ */
