@@ -30,10 +30,10 @@
 #define MAKE_DRIVER_VERSION(_MainVer, _MinorVer)	((((u32)(_MainVer))<<16)+_MinorVer)
 
 #define NIC_HEADER_SIZE				14			/* !< can be moved to typedef.h */
-#define NIC_MAX_PACKET_SIZE			1514		/* !< can be moved to typedef.h */
+#define NIC_MAX_PACKET_SIZE			8192		/* !< can be moved to typedef.h */
 #define NIC_MAX_SEND_PACKETS			10		/* max number of send packets the MiniportSendPackets function can accept, can be moved to typedef.h */
 #define NIC_VENDOR_DRIVER_VERSION       MAKE_DRIVER_VERSION(0, 001)	/* !< can be moved to typedef.h */
-#define NIC_MAX_PACKET_SIZE			1514		/* !< can be moved to typedef.h */
+#define NIC_MAX_PACKET_SIZE			8192		/* !< can be moved to typedef.h */
 
 typedef struct _MP_REG_ENTRY {
 
