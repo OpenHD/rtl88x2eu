@@ -2115,7 +2115,20 @@ config_phydm_switch_bandwidth_8822e(struct dm_struct *dm, u8 pri_ch,
 			odm_set_bb_reg(dm, R_0x1a00, BIT(4), 0);
 
 		/*TX_RF_BW:[1:0]=0x1, RX_RF_BW:[3:2]=0x1 */
-		odm_set_bb_reg(dm, R_0x9b0, 0xf, 0x5);
+		{
+			u8 rf_bw = 0x5;
+#if (DM_ODM_SUPPORT_TYPE & (ODM_CE | ODM_IOT))
+			if (dm->adapter) {
+				PADAPTER adapter = (PADAPTER)dm->adapter;
+
+				if (adapter->registrypriv.force_tx_rf_bw_80_for_bw40 &&
+				    MLME_IS_MONITOR(adapter))
+					/*TX_RF_BW:[1:0]=0x2, RX_RF_BW:[3:2]=0x1 */
+					rf_bw = 0x6;
+			}
+#endif
+			odm_set_bb_reg(dm, R_0x9b0, 0xf, rf_bw);
+		}
 
 		/*small BW */
 		odm_set_bb_reg(dm, R_0x9b0, 0xc0, 0x0);

@@ -256,6 +256,10 @@ uint rtw_tx_bw_mode = 0x21;
 module_param(rtw_tx_bw_mode, uint, 0644);
 MODULE_PARM_DESC(rtw_tx_bw_mode, "The max tx bw for 2.4G and 5G. format is the same as rtw_bw_mode");
 
+int rtw_force_tx_rf_bw_80_for_bw40 = 0;
+module_param(rtw_force_tx_rf_bw_80_for_bw40, int, 0644);
+MODULE_PARM_DESC(rtw_force_tx_rf_bw_80_for_bw40, "Force TX RF BW to 80MHz when configured BW is 40MHz (8822E monitor/injection workaround)");
+
 #ifdef CONFIG_FW_HANDLE_TXBCN
 uint rtw_tbtt_rpt = 0;	/*ROOT AP - BIT0, VAP1 - BIT1, VAP2 - BIT2, VAP3 - VAP3, FW report TBTT INT by C2H*/
 module_param(rtw_tbtt_rpt, uint, 0644);
@@ -1415,6 +1419,7 @@ uint loadparam(_adapter *padapter)
 #endif
 
 	registry_par->tx_bw_mode = (u8)rtw_tx_bw_mode;
+	registry_par->force_tx_rf_bw_80_for_bw40 = (u8)rtw_force_tx_rf_bw_80_for_bw40;
 
 #ifdef CONFIG_80211N_HT
 	registry_par->ht_enable = (u8)rtw_ht_enable;

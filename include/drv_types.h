@@ -249,6 +249,7 @@ struct registry_priv {
 #ifdef CONFIG_NARROWBAND_SUPPORTING
 	u8	rtw_nb_config;
 #endif
+	u8	force_tx_rf_bw_80_for_bw40;
 	u8	acm_method;
 	/* WMM */
 	u8	wmm_enable;
