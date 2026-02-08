@@ -4127,6 +4127,8 @@ exit:
 #endif
 
 
+void rx_process_phy_info(_adapter *padapter, union recv_frame *rframe);
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 24))
 int recv_frame_monitor(_adapter *padapter, union recv_frame *rframe)
 {
@@ -4145,6 +4147,15 @@ int recv_frame_monitor(_adapter *padapter, union recv_frame *rframe)
 	pskb->len = rframe->u.hdr.len;
 	pskb->data = rframe->u.hdr.rx_data;
 	skb_set_tail_pointer(pskb, rframe->u.hdr.len);
+
+	/* Update signal stats/SNR for monitor mode */
+	if (rframe->u.hdr.attrib.phy_info.physts_rpt_valid == _TRUE) {
+		struct dm_struct *dm = adapter_to_phydm(padapter);
+		rx_process_phy_info(padapter, rframe);
+		/* Keep proc rssi_a/rssi_b fresh in monitor mode */
+		dm->rssi_a = rframe->u.hdr.attrib.phy_info.rx_mimo_signal_strength[RF_PATH_A];
+		dm->rssi_b = rframe->u.hdr.attrib.phy_info.rx_mimo_signal_strength[RF_PATH_B];
+	}
 
 	if (ndev->type == ARPHRD_IEEE80211_RADIOTAP) {
 		/* fill radiotap header */
