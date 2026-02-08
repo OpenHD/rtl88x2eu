@@ -4149,12 +4149,17 @@ int recv_frame_monitor(_adapter *padapter, union recv_frame *rframe)
 	skb_set_tail_pointer(pskb, rframe->u.hdr.len);
 
 	/* Update signal stats/SNR for monitor mode */
-	if (rframe->u.hdr.attrib.phy_info.physts_rpt_valid == _TRUE) {
+	if (rframe->u.hdr.attrib.physt) {
 		struct dm_struct *dm = adapter_to_phydm(padapter);
-		rx_process_phy_info(padapter, rframe);
-		/* Keep proc rssi_a/rssi_b fresh in monitor mode */
+
+		if (rframe->u.hdr.attrib.phy_info.physts_rpt_valid == _TRUE)
+			rx_process_phy_info(padapter, rframe);
+
+		/* Keep proc rssi_a/rssi_b and snr_a/snr_b fresh in monitor mode */
 		dm->rssi_a = rframe->u.hdr.attrib.phy_info.rx_mimo_signal_strength[RF_PATH_A];
 		dm->rssi_b = rframe->u.hdr.attrib.phy_info.rx_mimo_signal_strength[RF_PATH_B];
+		padapter->recvpriv.ofdm_snr_latest[RF_PATH_A] = rframe->u.hdr.attrib.phy_info.rx_snr[RF_PATH_A];
+		padapter->recvpriv.ofdm_snr_latest[RF_PATH_B] = rframe->u.hdr.attrib.phy_info.rx_snr[RF_PATH_B];
 	}
 
 	if (ndev->type == ARPHRD_IEEE80211_RADIOTAP) {
