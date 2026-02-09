@@ -503,6 +503,7 @@ RTW_FUNC_2G_5G_ONLY void set_channel_bwmode(_adapter *padapter, unsigned char ch
 {
 	u8 center_ch, chnl_offset80 = HAL_PRIME_CHNL_OFFSET_DONT_CARE;
 	u8 hw_bwmode = bwmode;
+	u8 force_tx_rf_bw_80 = _FALSE;
 #if (defined(CONFIG_TDLS) && defined(CONFIG_TDLS_CH_SW)) || defined(CONFIG_MCC_MODE)
 	u8 iqk_info_backup = _FALSE;
 #endif
@@ -510,14 +511,14 @@ RTW_FUNC_2G_5G_ONLY void set_channel_bwmode(_adapter *padapter, unsigned char ch
 	if (padapter->bNotifyChannelChange)
 		RTW_INFO("[%s] ch = %d, offset = %d, bwmode = %d\n", __FUNCTION__, channel, channel_offset, bwmode);
 
-	/* Driver-side workaround: if monitor/injection requests 40MHz, use 80MHz HW channel config */
+	/* Driver-side workaround: for monitor/injection @40MHz, keep HW at 40MHz but force TX RF BW to 80MHz */
 	if (bwmode == CHANNEL_WIDTH_40 &&
 	    padapter->registrypriv.force_tx_rf_bw_80_for_bw40 &&
 	    MLME_IS_MONITOR(padapter) &&
 	    rtw_is_5g_ch(channel)) {
-		hw_bwmode = CHANNEL_WIDTH_80;
+		force_tx_rf_bw_80 = _TRUE;
 		if (padapter->bNotifyChannelChange)
-			RTW_INFO("[%s] force HW bwmode to 80MHz for monitor/injection (requested 40MHz)\n", __FUNCTION__);
+			RTW_INFO("[%s] force TX RF BW to 80MHz for monitor/injection (requested 40MHz)\n", __FUNCTION__);
 	}
 
 	center_ch = rtw_get_center_ch(channel, hw_bwmode, channel_offset);
@@ -559,6 +560,18 @@ RTW_FUNC_2G_5G_ONLY void set_channel_bwmode(_adapter *padapter, unsigned char ch
 #endif
 
 		rtw_hal_set_chnl_bw(padapter, center_ch, hw_bwmode, channel_offset, chnl_offset80); /* set center channel */
+
+		if (force_tx_rf_bw_80) {
+			struct dm_struct *dm = adapter_to_phydm(padapter);
+
+			/* TX_RF_BW:[1:0]=0x2 (80MHz), RX_RF_BW:[3:2]=0x1 (40MHz) */
+			odm_set_bb_reg(dm, R_0x9b0, 0xf, 0x6);
+			if (padapter->bNotifyChannelChange) {
+				u32 reg = odm_get_bb_reg(dm, R_0x9b0, 0xfff);
+				RTW_INFO("[%s] R_0x9b0[11:0]=0x%03x (TX_RF_BW=80, RX_RF_BW=40)\n",
+					 __FUNCTION__, reg);
+			}
+		}
 
 #if (defined(CONFIG_TDLS) && defined(CONFIG_TDLS_CH_SW)) || defined(CONFIG_MCC_MODE)
 		if (iqk_info_backup == _TRUE)
