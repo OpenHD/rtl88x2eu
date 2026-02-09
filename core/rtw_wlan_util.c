@@ -502,6 +502,7 @@ inline systime rtw_get_on_cur_ch_time(_adapter *adapter)
 RTW_FUNC_2G_5G_ONLY void set_channel_bwmode(_adapter *padapter, unsigned char channel, unsigned char channel_offset, unsigned short bwmode)
 {
 	u8 center_ch, chnl_offset80 = HAL_PRIME_CHNL_OFFSET_DONT_CARE;
+	u8 hw_bwmode = bwmode;
 #if (defined(CONFIG_TDLS) && defined(CONFIG_TDLS_CH_SW)) || defined(CONFIG_MCC_MODE)
 	u8 iqk_info_backup = _FALSE;
 #endif
@@ -509,9 +510,19 @@ RTW_FUNC_2G_5G_ONLY void set_channel_bwmode(_adapter *padapter, unsigned char ch
 	if (padapter->bNotifyChannelChange)
 		RTW_INFO("[%s] ch = %d, offset = %d, bwmode = %d\n", __FUNCTION__, channel, channel_offset, bwmode);
 
-	center_ch = rtw_get_center_ch(channel, bwmode, channel_offset);
+	/* Driver-side workaround: if monitor/injection requests 40MHz, use 80MHz HW channel config */
+	if (bwmode == CHANNEL_WIDTH_40 &&
+	    padapter->registrypriv.force_tx_rf_bw_80_for_bw40 &&
+	    MLME_IS_MONITOR(padapter) &&
+	    rtw_is_5g_ch(channel)) {
+		hw_bwmode = CHANNEL_WIDTH_80;
+		if (padapter->bNotifyChannelChange)
+			RTW_INFO("[%s] force HW bwmode to 80MHz for monitor/injection (requested 40MHz)\n", __FUNCTION__);
+	}
 
-	if (bwmode == CHANNEL_WIDTH_80) {
+	center_ch = rtw_get_center_ch(channel, hw_bwmode, channel_offset);
+
+	if (hw_bwmode == CHANNEL_WIDTH_80) {
 		if (center_ch > channel)
 			chnl_offset80 = HAL_PRIME_CHNL_OFFSET_LOWER;
 		else if (center_ch < channel)
@@ -532,7 +543,7 @@ RTW_FUNC_2G_5G_ONLY void set_channel_bwmode(_adapter *padapter, unsigned char ch
 		/* set Channel */
 		/* saved channel/bw info */
 		rtw_set_oper_ch(padapter, channel);
-		rtw_set_oper_bw(padapter, bwmode);
+		rtw_set_oper_bw(padapter, hw_bwmode);
 		rtw_set_oper_choffset(padapter, channel_offset);
 
 #if (defined(CONFIG_TDLS) && defined(CONFIG_TDLS_CH_SW)) || defined(CONFIG_MCC_MODE)
@@ -547,7 +558,7 @@ RTW_FUNC_2G_5G_ONLY void set_channel_bwmode(_adapter *padapter, unsigned char ch
 		}
 #endif
 
-		rtw_hal_set_chnl_bw(padapter, center_ch, bwmode, channel_offset, chnl_offset80); /* set center channel */
+		rtw_hal_set_chnl_bw(padapter, center_ch, hw_bwmode, channel_offset, chnl_offset80); /* set center channel */
 
 #if (defined(CONFIG_TDLS) && defined(CONFIG_TDLS_CH_SW)) || defined(CONFIG_MCC_MODE)
 		if (iqk_info_backup == _TRUE)
