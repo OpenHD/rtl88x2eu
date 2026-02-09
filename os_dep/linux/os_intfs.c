@@ -256,7 +256,8 @@ uint rtw_tx_bw_mode = 0x21;
 module_param(rtw_tx_bw_mode, uint, 0644);
 MODULE_PARM_DESC(rtw_tx_bw_mode, "The max tx bw for 2.4G and 5G. format is the same as rtw_bw_mode");
 
-int rtw_force_tx_rf_bw_80_for_bw40 = 0;
+/* Default-enable 40MHz monitor/injection workaround (TX 80MHz / RX 40MHz) */
+int rtw_force_tx_rf_bw_80_for_bw40 = 1;
 module_param(rtw_force_tx_rf_bw_80_for_bw40, int, 0644);
 MODULE_PARM_DESC(rtw_force_tx_rf_bw_80_for_bw40, "Force TX RF BW to 80MHz when configured BW is 40MHz (8822E monitor/injection workaround)");
 
