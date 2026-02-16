@@ -5045,6 +5045,10 @@ s32 rtw_monitor_xmit_entry(struct sk_buff *skb, struct net_device *ndev)
 
 	_rtw_memcpy(pframe, (void*)skb->data, skb->len);
 
+	/* blink LED on monitor TX */
+	if (skb->len >= 10)
+		rtw_led_tx_control(padapter, GetAddr1Ptr(pframe));
+
 	pattrib->pktlen = skb->len;
 
 	//printk("**** rt mcs %x rate %x raid %d sgi %d bwidth %d ldpc %d stbc %d txflags %x\n", fixed_rate, pattrib->rate, pattrib->raid, sgi, bwidth, ldpc, stbc, txflags);

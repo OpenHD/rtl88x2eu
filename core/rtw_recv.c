@@ -4148,6 +4148,10 @@ int recv_frame_monitor(_adapter *padapter, union recv_frame *rframe)
 	pskb->data = rframe->u.hdr.rx_data;
 	skb_set_tail_pointer(pskb, rframe->u.hdr.len);
 
+	/* blink LED on monitor RX before radiotap header is added */
+	if (rframe->u.hdr.rx_data && rframe->u.hdr.len >= 10)
+		rtw_led_rx_control(padapter, GetAddr1Ptr(rframe->u.hdr.rx_data));
+
 	/* Update signal stats/SNR for monitor mode */
 	if (rframe->u.hdr.attrib.physt) {
 		struct dm_struct *dm = adapter_to_phydm(padapter);
