@@ -54,6 +54,7 @@
 #include <linux/ip.h>
 #include <linux/kthread.h>
 #include <linux/list.h>
+#include <linux/timer.h>
 #include <linux/vmalloc.h>
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
