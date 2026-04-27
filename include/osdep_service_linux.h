@@ -154,13 +154,12 @@
 #endif
 
 /*
- * MLD related linux kernel patch in
- * Android Common Kernel android13-5.15
- * refs/heads/common-android13-5.15-2023-04 (5.15.94)
- * refs/heads/android13-5.15-lts (5.15.106)
+ * MLD related cfg80211 patches exist in Android common 5.15 kernels, but
+ * generic distro 5.15.y kernels do not carry those API changes.
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 94) )
-        #define CONFIG_MLD_KERNEL_PATCH
+#if defined(CONFIG_RTW_ANDROID) && (CONFIG_RTW_ANDROID > 0) && \
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 94))
+	#define CONFIG_MLD_KERNEL_PATCH
 #endif
 
 typedef struct	semaphore _sema;
