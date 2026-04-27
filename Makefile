@@ -313,9 +313,11 @@ _HAL_INTFS_FILES :=	hal/hal_intf.o \
 
 
 EXTRA_CFLAGS += -I$(src)/platform
+ccflags-y += -I$(src)/platform
 _PLATFORM_FILES := platform/platform_ops.o
 
 EXTRA_CFLAGS += -I$(src)/hal/btc
+ccflags-y += -I$(src)/hal/btc
 
 ########### HAL_RTL8188E #################################
 ifeq ($(CONFIG_RTL8188E), y)
@@ -2570,6 +2572,7 @@ rtk_core += core/rtw_sdio.o
 endif
 
 EXTRA_CFLAGS += -I$(src)/core/crypto
+ccflags-y += -I$(src)/core/crypto
 rtk_core += \
 		core/crypto/aes-internal.o \
 		core/crypto/aes-internal-enc.o \
