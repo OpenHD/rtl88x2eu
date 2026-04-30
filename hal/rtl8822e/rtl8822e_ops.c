@@ -792,6 +792,9 @@ u8 rtl8822e_read_efuse(PADAPTER adapter)
 	val8 = rtw_read8(adapter, REG_SYS_EEPROM_CTRL_8822E);
 	hal->EepromOrEfuse = (val8 & BIT_EERPOMSEL_8822E) ? _TRUE : _FALSE;
 	hal->bautoload_fail_flag = (val8 & BIT_AUTOLOAD_SUS_8822E) ? _FALSE : _TRUE;
+	printk(KERN_INFO DRIVER_PREFIX "%s: REG_SYS_EEPROM_CTRL=0x%02x source=%s autoload=%s\n",
+	       __func__, val8, hal->EepromOrEfuse ? "EEPROM" : "EFUSE",
+	       hal->bautoload_fail_flag ? "FAIL" : "OK");
 	if (hal->bautoload_fail_flag == _TRUE)
 		RTW_ERR("%s: HW %s AUTO LOAD FAIL!!\n", __func__, hal->EepromOrEfuse ? "EEPROM" : "EFUSE");
 
@@ -802,6 +805,9 @@ u8 rtl8822e_read_efuse(PADAPTER adapter)
 
 	/* 2. Read eFuse */
 	EFUSE_ShadowMapUpdate(adapter, EFUSE_WIFI, 0);
+	printk(KERN_INFO DRIVER_PREFIX "%s: HW shadow efuse after EFUSE_ShadowMapUpdate\n",
+	       __func__);
+	rtw_dump_cur_efuse(adapter);
 
 #ifdef CONFIG_RTL8822E_XCAP_NEW_POLICY
 	h_efuse_xcap_b9 = efuse_map[EEPROM_XTAL_B9_8822E];
@@ -811,6 +817,8 @@ u8 rtl8822e_read_efuse(PADAPTER adapter)
 	/* 3. Read Efuse file if necessary */
 #ifdef CONFIG_EFUSE_CONFIG_FILE
 	if (check_phy_efuse_tx_power_info_valid(adapter) == _FALSE) {
+		printk(KERN_INFO DRIVER_PREFIX "%s: phy efuse tx power info invalid; trying file efuse\n",
+		       __func__);
 		if (Hal_readPGDataFromConfigFile(adapter) != _SUCCESS)
 			RTW_WARN("%s: invalid phy efuse and read from file fail, will use driver default!!\n", __FUNCTION__);
 #ifdef CONFIG_RTL8822E_XCAP_NEW_POLICY
@@ -819,7 +827,9 @@ u8 rtl8822e_read_efuse(PADAPTER adapter)
 			f_efuse_xcap_110_111 = ((efuse_map[EEPROM_XTAL_111_8822E] << 8) | efuse_map[EEPROM_XTAL_110_8822E]);
 		}
 #endif
-	}
+	} else
+		printk(KERN_INFO DRIVER_PREFIX "%s: phy efuse tx power info valid; not loading efuse file %s\n",
+		       __func__, EFUSE_MAP_PATH);
 #endif /* CONFIG_EFUSE_CONFIG_FILE */
 
 	/* 4. Parse Efuse data */
@@ -4299,4 +4309,3 @@ void rtl8822e_set_hal_ops(PADAPTER adapter)
 	ops->reqtxrpt = rtl8822e_req_txrpt_cmd;
 
 }
-

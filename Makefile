@@ -15,6 +15,8 @@ EXTRA_CFLAGS += -Wno-unused-function
 EXTRA_CFLAGS += -Wno-unused
 EXTRA_CFLAGS += -Wno-uninitialized
 EXTRA_CFLAGS += -Wno-declaration-after-statement
+EXTRA_CFLAGS += -Wno-missing-prototypes
+EXTRA_CFLAGS += -Wno-missing-declarations
 
 # Let the OS decide the regd instead of phy "self-managed"
 EXTRA_CFLAGS += -DCONFIG_REGD_SRC_FROM_OS
@@ -127,10 +129,10 @@ EXTRA_CFLAGS += -DCONFIG_RTW_ANDROID=$(CONFIG_RTW_ANDROID)
 endif
 
 ########################## Debug ###########################
-CONFIG_RTW_DEBUG = n
+CONFIG_RTW_DEBUG = y
 # default log level is _DRV_INFO_ = 4,
 # please refer to "How_to_set_driver_debug_log_level.doc" to set the available level.
-CONFIG_RTW_LOG_LEVEL = 4
+CONFIG_RTW_LOG_LEVEL = 7
 
 # enable /proc/net/rtlxxxx/ debug interfaces
 CONFIG_PROC_DEBUG = y
@@ -1155,6 +1157,8 @@ endif
 
 EXTRA_CFLAGS += -DCONFIG_EFUSE_CONFIG_FILE
 EXTRA_CFLAGS += -DEFUSE_MAP_PATH=\"/etc/wifi/wifi_efuse_$(MODULE_NAME).map\"
+EFUSE_MAP_INSTALL_DIR ?= /etc/wifi
+EFUSE_MAP_SRC ?= efuse/wifi_efuse_$(MODULE_NAME).map
 
 #WIFIMAC_PATH
 USER_WIFIMAC_PATH ?=
@@ -2625,10 +2629,15 @@ strip:
 
 install:
 	install -p -m 644 $(MODULE_NAME).ko  $(MODDESTDIR)
+	@if [ -f "$(EFUSE_MAP_SRC)" ]; then \
+		install -d "$(EFUSE_MAP_INSTALL_DIR)"; \
+		install -p -m 644 "$(EFUSE_MAP_SRC)" "$(EFUSE_MAP_INSTALL_DIR)/wifi_efuse_$(MODULE_NAME).map"; \
+	fi
 	/sbin/depmod -a ${KVER}
 
 uninstall:
 	rm -f $(MODDESTDIR)/$(MODULE_NAME).ko
+	rm -f $(EFUSE_MAP_INSTALL_DIR)/wifi_efuse_$(MODULE_NAME).map
 	/sbin/depmod -a ${KVER}
 
 modules_install:
