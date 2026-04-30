@@ -15660,13 +15660,32 @@ void rtw_dump_cur_efuse(PADAPTER padapter)
 {
 	int mapsize =0;
 	HAL_DATA_TYPE *hal_data = GET_HAL_DATA(padapter);
+	const char *src = "HW EFUSE";
 
 	EFUSE_GetEfuseDefinition(padapter, EFUSE_WIFI, TYPE_EFUSE_MAP_LEN , (void *)&mapsize, _FALSE);
 
 	if (mapsize <= 0 || mapsize > EEPROM_MAX_SIZE) {
 		RTW_ERR("wrong map size %d\n", mapsize);
+		printk(KERN_ERR DRIVER_PREFIX "EFUSE dump skipped: wrong map size %d\n", mapsize);
 		return;
 	}
+
+	if (hal_data->efuse_file_status == EFUSE_FILE_LOADED)
+		src = "EFUSE FILE";
+#ifdef CONFIG_MP_INCLUDED
+	else {
+		struct mp_priv *mpp = NULL;
+
+		mpp = (struct mp_priv *)&padapter->mppriv;
+		if (rtw_mp_mode_check(padapter) && mpp->efuse_update_on)
+			src = "FAKE EFUSE";
+	}
+#endif
+	printk(KERN_INFO DRIVER_PREFIX "%s dump: map_size=%d first 256 bytes follow\n", src, mapsize);
+	print_hex_dump(KERN_INFO, DRIVER_PREFIX "efuse: ",
+		       DUMP_PREFIX_OFFSET, 16, 1,
+		       hal_data->efuse_eeprom_data,
+		       mapsize > 256 ? 256 : mapsize, false);
 
 #ifdef CONFIG_RTW_DEBUG
 	if (hal_data->efuse_file_status == EFUSE_FILE_LOADED)
@@ -15692,28 +15711,42 @@ u32 Hal_readPGDataFromConfigFile(PADAPTER padapter)
 	HAL_DATA_TYPE *hal_data = GET_HAL_DATA(padapter);
 	u32 ret = _FALSE;
 	u32 maplen = 0;
+	const char *path = EFUSE_MAP_PATH;
 #ifdef CONFIG_MP_INCLUDED
 		struct mp_priv *pmp_priv = &padapter->mppriv;
 #endif
 
 	EFUSE_GetEfuseDefinition(padapter, EFUSE_WIFI, TYPE_EFUSE_MAP_LEN , (void *)&maplen, _FALSE);
+	printk(KERN_INFO DRIVER_PREFIX "%s: maplen=%u default_path=%s\n",
+	       __func__, maplen, EFUSE_MAP_PATH);
 
 	if (maplen < 256 || maplen > EEPROM_MAX_SIZE) {
 		RTW_ERR("eFuse length error :%d\n", maplen);
+		printk(KERN_ERR DRIVER_PREFIX "%s: eFuse length error:%u\n",
+		       __func__, maplen);
 		return _FALSE;
 	}	
 #ifdef CONFIG_MP_INCLUDED
 	if (pmp_priv->efuse_update_file == _TRUE && (rtw_mp_mode_check(padapter))) {
 		RTW_INFO("%s, eFuse read from file :%s\n", __func__, pmp_priv->efuse_file_path);
+		path = pmp_priv->efuse_file_path;
+		printk(KERN_INFO DRIVER_PREFIX "%s: MP eFuse read from file:%s\n",
+		       __func__, path);
 		ret = rtw_read_efuse_from_file(pmp_priv->efuse_file_path, hal_data->efuse_eeprom_data, maplen);
 		pmp_priv->efuse_update_file = _FALSE;
 	} else
 #endif
 	{
+		printk(KERN_INFO DRIVER_PREFIX "%s: eFuse read from file:%s\n",
+		       __func__, path);
 		ret = rtw_read_efuse_from_file(EFUSE_MAP_PATH, hal_data->efuse_eeprom_data, maplen);
 	}
 
 	hal_data->efuse_file_status = ((ret == _FAIL) ? EFUSE_FILE_FAILED : EFUSE_FILE_LOADED);
+	printk(KERN_INFO DRIVER_PREFIX "%s: eFuse file %s from %s\n",
+	       __func__,
+	       hal_data->efuse_file_status == EFUSE_FILE_LOADED ? "LOADED" : "FAILED",
+	       path);
 
 	if (hal_data->efuse_file_status == EFUSE_FILE_LOADED)
 		rtw_dump_cur_efuse(padapter);
