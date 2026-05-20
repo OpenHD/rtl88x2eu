@@ -4824,6 +4824,8 @@ static int cfg80211_rtw_set_txpower(struct wiphy *wiphy,
 	struct rtw_wiphy_data *wiphy_data = rtw_wiphy_priv(wiphy);
 	_adapter *adapter = wiphy_to_adapter(wiphy);
 	int ret = -EOPNOTSUPP;
+	int openhd_override_tx_power_mbm = 0;
+	bool update_tx_power = false;
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
 	if (wdev) {
@@ -4864,6 +4866,24 @@ static int cfg80211_rtw_set_txpower(struct wiphy *wiphy,
 	}
 
 	if (ret == 0)
+		update_tx_power = true;
+
+	openhd_override_tx_power_mbm = get_openhd_override_tx_power_mbm();
+	if (openhd_override_tx_power_mbm) {
+		if (!phy_is_txpwr_user_mbm_valid(adapter, openhd_override_tx_power_mbm)) {
+			RTW_WARN("OpenHD: override tx power %d mbm not supported\n",
+				openhd_override_tx_power_mbm);
+		} else {
+			wiphy_data->txpwr_total_lmt_mbm = UNSPECIFIED_MBM;
+			wiphy_data->txpwr_total_target_mbm = openhd_override_tx_power_mbm;
+			RTW_WARN("OpenHD: using openhd_override_tx_power_mbm=%d\n",
+				openhd_override_tx_power_mbm);
+			ret = 0;
+			update_tx_power = true;
+		}
+	}
+
+	if (update_tx_power)
 		rtw_run_in_thread_cmd_wait(adapter, ((void *)(rtw_update_txpwr_level_all_hwband)), adapter_to_dvobj(adapter), 2000);
 
 exit:
@@ -7312,6 +7332,31 @@ static void rtw_get_chbwoff_from_cfg80211_chan_def(
 }
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)) */
 
+static void rtw_apply_openhd_monitor_overrides(_adapter *padapter,
+	u8 *target_channel, u8 *target_width, u8 *target_offset)
+{
+	struct registry_priv *regsty = &padapter->registrypriv;
+
+	regsty->openhd_override_channel = get_openhd_override_channel();
+	regsty->openhd_override_channel_width = get_openhd_override_channel_width();
+
+	if (regsty->openhd_override_channel) {
+		*target_channel = regsty->openhd_override_channel;
+		RTW_WARN("OpenHD: using openhd_override_channel=%d\n",
+			*target_channel);
+	}
+
+	if (regsty->openhd_override_channel_width) {
+		*target_width = regsty->openhd_override_channel_width;
+
+		if (*target_width <= CHANNEL_WIDTH_20)
+			*target_offset = HAL_PRIME_CHNL_OFFSET_DONT_CARE;
+
+		RTW_WARN("OpenHD: using openhd_override_channel_width=%d\n",
+			*target_width);
+	}
+}
+
 static int cfg80211_rtw_set_monitor_channel(struct wiphy *wiphy
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
 	, struct net_device *dev
@@ -7350,6 +7395,9 @@ static int cfg80211_rtw_set_monitor_channel(struct wiphy *wiphy
 	rtw_get_chbw_from_nl80211_channel_type(chan, channel_type,
 		&ht_option, &target_channal, &target_width, &target_offset);
 #endif
+	rtw_apply_openhd_monitor_overrides(padapter, &target_channal,
+		&target_width, &target_offset);
+
 	RTW_INFO(FUNC_ADPT_FMT" ch:%d bw:%d, offset:%d\n",
 		FUNC_ADPT_ARG(padapter), target_channal,
 		target_width, target_offset);

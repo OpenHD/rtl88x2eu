@@ -2403,6 +2403,104 @@ static ssize_t proc_set_rx_chk_limit(struct file *file, const char __user *buffe
 	return count;
 }
 
+static int thermal_state_temperature_offset = 32;
+
+static u8 rtw_proc_read_thermal_value(_adapter *padapter, u8 rf_path)
+{
+	u32 thermal_reg_mask;
+	u32 thermal_value;
+
+	if (IS_8822C_SERIES(GET_HAL_DATA(padapter)->version_id)
+		|| IS_8723F_SERIES(GET_HAL_DATA(padapter)->version_id)
+		|| IS_8822E_SERIES(GET_HAL_DATA(padapter)->version_id))
+		thermal_reg_mask = 0x007e;
+	else
+		thermal_reg_mask = 0xfc00;
+
+	phy_set_rf_reg(padapter, rf_path, 0x42, BIT19, 0x1);
+	phy_set_rf_reg(padapter, rf_path, 0x42, BIT19, 0x0);
+	phy_set_rf_reg(padapter, rf_path, 0x42, BIT19, 0x1);
+	rtw_usleep_os(15);
+
+	thermal_value = phy_query_rf_reg(padapter, rf_path, 0x42, thermal_reg_mask);
+
+	if (thermal_value > 63)
+		thermal_value = 63;
+
+	return (u8)thermal_value;
+}
+
+static int proc_get_thermal_state(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	HAL_DATA_TYPE *hal_data;
+	u8 rx_cnt;
+	u8 rf_path;
+
+	if (!padapter)
+		return -EFAULT;
+
+	hal_data = GET_HAL_DATA(padapter);
+	rx_cnt = rf_type_to_rf_rx_cnt(hal_data->rf_type);
+
+	if (rx_cnt > RF_PATH_MAX)
+		rx_cnt = RF_PATH_MAX;
+
+	RTW_PRINT_SEL(m, "temperature_offset:%d\n", thermal_state_temperature_offset);
+	RTW_PRINT_SEL(m, "eeprom_thermal_meter:%u\n", hal_data->eeprom_thermal_meter);
+
+	for (rf_path = RF_PATH_A; rf_path < rx_cnt; rf_path++) {
+		int thermal_value = rtw_proc_read_thermal_value(padapter, rf_path);
+		int temperature = ((thermal_value - hal_data->eeprom_thermal_meter) * 5) / 2
+			+ thermal_state_temperature_offset;
+
+		RTW_PRINT_SEL(m,
+			"rf_path:%u thermal_value:%d temperature:%d\n",
+			rf_path, thermal_value, temperature);
+	}
+
+	return 0;
+}
+
+static ssize_t proc_set_thermal_state(struct file *file,
+	const char __user *buffer, size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	char tmp[32] = {0};
+	int offset_temp;
+
+	if (!padapter)
+		return -EFAULT;
+
+	if (count < 1) {
+		RTW_INFO("thermal_state argument size is less than 1\n");
+		return -EFAULT;
+	}
+
+	if (count >= sizeof(tmp)) {
+		rtw_warn_on(1);
+		return -EFAULT;
+	}
+
+	if (!buffer || copy_from_user(tmp, buffer, count))
+		return -EFAULT;
+
+	if (sscanf(tmp, "%d", &offset_temp) < 1)
+		return count;
+
+	if (offset_temp < 0 || offset_temp > 70) {
+		RTW_INFO("thermal_state offset out of range: %d\n", offset_temp);
+		return -EFAULT;
+	}
+
+	thermal_state_temperature_offset = offset_temp;
+	RTW_INFO("thermal_state temperature offset: %d\n", thermal_state_temperature_offset);
+
+	return count;
+}
+
 #ifdef CONFIG_TX_DUTY
 static int proc_get_txduty_param(struct seq_file *m, void *v)
 {
@@ -5638,6 +5736,7 @@ static ssize_t proc_set_amsdu_mode(struct file *file, const char __user *buffer,
 * init/deinit when register/unregister net_device
 */
 const struct rtw_proc_hdl adapter_proc_hdls[] = {
+	RTW_PROC_HDL_SSEQ("thermal_state", proc_get_thermal_state, proc_set_thermal_state),
 #if RTW_SEQ_FILE_TEST
 	RTW_PROC_HDL_SEQ("seq_file_test", &seq_file_test, NULL),
 #endif

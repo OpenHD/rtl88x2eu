@@ -411,6 +411,9 @@ struct registry_priv {
 #endif
 	u8	RegEnableTxPowerByRate;
 
+	int openhd_override_channel;
+	int openhd_override_channel_width;
+
 	u8 target_tx_pwr_valid;
 	s8 target_tx_pwr_2g[RF_PATH_MAX][RATE_SECTION_NUM];
 #if CONFIG_IEEE80211_BAND_5GHZ
@@ -2221,5 +2224,9 @@ void rtw_wow_get_mdns_passthru_list(_adapter *padapter, struct rtw_mdns_passthru
 	#include <pci_ops.h>
 	#include <pci_hal.h>
 #endif
+
+int get_openhd_override_channel(void);
+int get_openhd_override_channel_width(void);
+int get_openhd_override_tx_power_mbm(void);
 
 #endif /* __DRV_TYPES_H__ */
