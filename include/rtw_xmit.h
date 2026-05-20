@@ -86,7 +86,7 @@
 
 
 /* xmit extension buff defination */
-#define MAX_XMIT_EXTBUF_SZ	(4096)
+#define MAX_XMIT_EXTBUF_SZ	(1536)
 
 #ifdef CONFIG_SINGLE_XMIT_BUF
 	#define NR_XMIT_EXTBUFF	(1)
@@ -100,8 +100,12 @@
 	#define MAX_CMDBUF_SZ	(512 * 18)
 #elif defined(CONFIG_RTL8723D) && defined(CONFIG_LPS_POFF)
 	#define MAX_CMDBUF_SZ	(128*70) /*(8960)*/
-#elif (defined(CONFIG_RTL8822C) || defined(CONFIG_RTL8822E)) && defined(CONFIG_WAR_OFFLOAD)
+#elif (defined(CONFIG_RTL8822C) || defined(CONFIG_RTL8822E)) && (defined(CONFIG_WAR_OFFLOAD) || defined(CONFIG_MDNS_OFFLOAD))
+#if defined(CONFIG_RTL8822E) && defined(CONFIG_LPS_PG)
+	#define MAX_CMDBUF_SZ	(128*256) /*(32768) */
+#else
 	#define MAX_CMDBUF_SZ	(128*128) /*(16k) */
+#endif
 #elif defined(CONFIG_RTL8723F) && defined(CONFIG_WAR_OFFLOAD)
 	#define MAX_CMDBUF_SZ	(128*64) /*(8192) */
 #elif defined(CONFIG_RTL8822E) && defined(CONFIG_LPS_PG)
@@ -497,8 +501,6 @@ struct pkt_attrib {
 	 */
 	u8 bf_pkt_type;
 #endif
-
-	u8  inject; /* == a5 if injected */
 
 #ifdef CONFIG_RTW_MGMT_QUEUE
 	u8 ps_dontq; /* 1: this frame can't be queued at PS state */

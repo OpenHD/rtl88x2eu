@@ -1171,8 +1171,8 @@ eeprom_parser_8822e(struct halmac_adapter *adapter, u8 *phy_map, u8 *log_map)
 			} else { /* 2byte entry*/
 				value8 = *(phy_map + efuse_idx);
 				hdr2 = value8;
-				if (hdr2 == 0xff)
-					break;
+				//if (hdr2 == 0xff)
+					//break;
 
 				blk_idx = (((hdr2 & 0xF0) >> 4) << 3) +
 					  (((hdr & 0xF0) >> 4) >> 1);
@@ -1183,8 +1183,8 @@ eeprom_parser_8822e(struct halmac_adapter *adapter, u8 *phy_map, u8 *log_map)
 		} else {
 			value8 = *(phy_map + efuse_idx);
 			hdr2 = value8;
-			if (hdr2 == 0xff)
-				break;
+			//if (hdr2 == 0xff)
+			//	break;
 
 			blk_idx = ((hdr2 & 0xF0) >> 4) | ((hdr & 0x0F) << 4);
 			word_en = hdr2 & 0x0F;
@@ -1841,6 +1841,7 @@ update_eeprom_mask_8822e(struct halmac_adapter *adapter,
 		}
 	}
 
+	PLTFM_FREE(mask_map, eeprom_size);
 	PLTFM_FREE(map, eeprom_size);
 
 	return status;

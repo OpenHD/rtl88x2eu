@@ -440,9 +440,8 @@ void _halrf_txgapk_calculate_offset_8822e(
 			halrf_delay_1us(100);
 			tmp = odm_get_bb_reg(dm, 0x1bfc, 0x0000ffff);
 			RF_DBG(dm, DBG_RF_TXGAPK, "[TXGAPK]   0x1bfc[15:0](0x%x) = 0x8000   delay %d*100us\n", tmp, i + 1);
-			if (tmp == 0x8000) {
+			if (tmp == 0x8000)
 				break;
-			}
 		}
 
 		odm_set_bb_reg(dm, R_0x1b10, 0x000000ff, 0x00);
@@ -490,11 +489,11 @@ void _halrf_txgapk_calculate_offset_8822e(
 		odm_set_rf_reg(dm, path, 0x89, 0x00003, 0x3);
 		odm_set_rf_reg(dm, path, RF_0x00, 0x003e0, 0x0f);
 
-		if (channel >= 16 && channel <= 96)
+		if (channel >= 36 && channel <= 64)
 			odm_set_bb_reg(dm, R_0x1b98, 0x00007000, 0x2);
 		else if (channel >= 100 && channel <= 144)
 			odm_set_bb_reg(dm, R_0x1b98, 0x00007000, 0x3);
-		else if (channel >= 149 && channel <= 253) 
+		else if (channel >= 149 && channel <= 177) 
 			odm_set_bb_reg(dm, R_0x1b98, 0x00007000, 0x4);
 
 		backup_pi[path] = odm_get_bb_reg(dm, set_pi[path], 0xc0000000);
@@ -517,11 +516,10 @@ void _halrf_txgapk_calculate_offset_8822e(
 			halrf_delay_1us(100);
 			tmp = odm_get_bb_reg(dm, 0x1bfc, 0x0000ffff);
 			RF_DBG(dm, DBG_RF_TXGAPK, "[TXGAPK]   0x1bfc[15:0](0x%x) = 0x8000   delay %d*100us\n", tmp, i + 1);
-			if (tmp == 0x8000) {
+			if (tmp == 0x8000)
 				break;
-			}
 		}
-		
+
 		odm_set_bb_reg(dm, R_0x1b10, 0x000000ff, 0x00);
 		halrf_delay_1us(100);
 		odm_set_bb_reg(dm, set_pi[path], 0xc0000000, backup_pi[path]);
@@ -628,7 +626,7 @@ void _halrf_txgapk_write_tx_gain_8822e(
 		tmp = 0x20;	/*2G OFDM*/
 		tmp1 = 0x60;	/*2G CCK*/
 		band_idx = 1;
-	} else if (channel >= 16 && channel <= 96) {
+	} else if (channel >= 36 && channel <= 64) {
 		tmp = 0x200;	/*5G L*/
 		tmp1 = 0x0;
 		band_idx = 2;
@@ -636,7 +634,7 @@ void _halrf_txgapk_write_tx_gain_8822e(
 		tmp = 0x280;	/*5G M*/
 		tmp1 = 0x0;
 		band_idx = 3;
-	} else if (channel >= 149 && channel <= 253) {
+	} else if (channel >= 149 && channel <= 177) {
 		tmp = 0x300;	/*5G H*/
 		tmp1 = 0x0;
 		band_idx = 4;

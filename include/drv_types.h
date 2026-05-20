@@ -249,7 +249,6 @@ struct registry_priv {
 #ifdef CONFIG_NARROWBAND_SUPPORTING
 	u8	rtw_nb_config;
 #endif
-	u8	force_tx_rf_bw_80_for_bw40;
 	u8	acm_method;
 	/* WMM */
 	u8	wmm_enable;
@@ -412,9 +411,6 @@ struct registry_priv {
 #endif
 	u8	RegEnableTxPowerByRate;
 
-	int32_t openhd_override_channel;
-	int32_t openhd_override_channel_width;
-
 	u8 target_tx_pwr_valid;
 	s8 target_tx_pwr_2g[RF_PATH_MAX][RATE_SECTION_NUM];
 #if CONFIG_IEEE80211_BAND_5GHZ
@@ -453,10 +449,6 @@ struct registry_priv {
 	u8 adaptivity_mode;
 	s8 adaptivity_th_l2h_ini;
 	s8 adaptivity_th_edcca_hl_diff;
-	
-	// EDCCA threshold override
-	u8 edcca_thresh_override_en; 
-	s8 edcca_thresh_l2h_override; 
 
 	u8 boffefusemask;
 	BOOLEAN bFileMaskEfuse;
@@ -589,22 +581,7 @@ struct registry_priv {
 #if defined(CONFIG_CHANGE_DTIM_PERIOD) && defined(CONFIG_AP_MODE)
 	u8 dtim_period;
 #endif
-
 };
-
-extern int rtw_tx_pwr_idx_override;
-static u8 get_overridden_tx_power_index(u8 index) {
-	int override_index = *(volatile int*)&rtw_tx_pwr_idx_override;
-	if (override_index < 0)
-		override_index = 0;
-	if (override_index > MAX_POWER_INDEX)
-		override_index = MAX_POWER_INDEX;
-	*(volatile int*)&rtw_tx_pwr_idx_override = override_index;
-
-	if (override_index)
-		return (u8)override_index;
-	return index;
-}
 
 /* For registry parameters */
 #define RGTRY_OFT(field) ((u32)FIELD_OFFSET(struct registry_priv, field))
@@ -1255,6 +1232,7 @@ struct tx_duty_t {
 #define WOW_CAP_CSA BIT2
 #define WOW_CAP_WPA3_SAE BIT3
 #define WOW_CAP_DIS_INBAND_SIGNAL BIT4
+#define WOW_CAP_MDNS BIT5
 
 #define RFCTL_REG_WORLDWIDE(rfctl) (IS_ALPHA2_WORLDWIDE(rfctl->alpha2))
 #define RFCTL_REG_ALPHA2_UNSPEC(rfctl) (IS_ALPHA2_UNSPEC(rfctl->alpha2)) /* ex: only domain code is specified */
@@ -2207,6 +2185,16 @@ int rtw_suspend_free_assoc_resource(_adapter *padapter);
 #ifdef CONFIG_WOWLAN
 	int rtw_suspend_wow(_adapter *padapter);
 	int rtw_resume_process_wow(_adapter *padapter);
+#ifdef CONFIG_MDNS_OFFLOAD
+int rtw_wow_add_mdns_resp(_adapter *padapter, u8 index, u8 *resp_content, u16 content_len);
+int rtw_wow_del_mdns_resp(_adapter *padapter, u8 index);
+int rtw_wow_get_mdns_resp_ent(_adapter *padapter, u8 index, struct rtw_mdns_resp_entry **resp_entry);
+int rtw_wow_add_mdns_match_crit(_adapter *padapter, u8 index, u16 match_type, u16 name_offset, u16 name_len);
+int rtw_wow_del_mdns_match_crit(_adapter *padapter, u8 index);
+int rtw_wow_add_mdns_passthru_name(_adapter *padapter, u8 *name, u8 name_len);
+void rtw_wow_clr_mdns_passthru_name(_adapter *padapter);
+void rtw_wow_get_mdns_passthru_list(_adapter *padapter, struct rtw_mdns_passthru_list **passthru_list);
+#endif
 #endif
 
 /* HCI Related header file */
@@ -2233,10 +2221,5 @@ int rtw_suspend_free_assoc_resource(_adapter *padapter);
 	#include <pci_ops.h>
 	#include <pci_hal.h>
 #endif
-
-// OpenHD crda workaround
-int get_openhd_override_channel(void);
-int get_openhd_override_channel_width(void);
-int get_openhd_override_tx_power_mbm(void);
 
 #endif /* __DRV_TYPES_H__ */

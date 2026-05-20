@@ -100,63 +100,26 @@ static s32 update_txdesc(struct xmit_frame *pxmitframe, u8 *pmem, s32 sz, u8 bag
 	SET_TX_DESC_QSEL_8822E(ptxdesc,  pattrib->qsel);
 
 	/*offset 12 */
-	// Not injected
-	if (pattrib->inject != 0xa5) {
-		if (!pattrib->qos_en) {
-			/* HW sequence, to fix to use 0 queue. todo: 4AC packets to use auto queue select */
-			SET_TX_DESC_DISQSELSEQ_8822E(ptxdesc, 1);
-			SET_TX_DESC_EN_HWSEQ_8822E(ptxdesc, 1);/* Hw set sequence number */
-			SET_TX_DESC_HW_SSN_SEL_8822E(ptxdesc, pattrib->hw_ssn_sel);
-			SET_TX_DESC_EN_HWEXSEQ_8822E(ptxdesc, 0);
-		} else {
-			SET_TX_DESC_SW_SEQ_8822E(ptxdesc, pattrib->seqnum);
-		}
-	}
+	if (!pattrib->qos_en) {
+		/* HW sequence, to fix to use 0 queue. todo: 4AC packets to use auto queue select */
+		SET_TX_DESC_DISQSELSEQ_8822E(ptxdesc, 1);
+		SET_TX_DESC_EN_HWSEQ_8822E(ptxdesc, 1);/* Hw set sequence number */
+		SET_TX_DESC_HW_SSN_SEL_8822E(ptxdesc, pattrib->hw_ssn_sel);
+		SET_TX_DESC_EN_HWEXSEQ_8822E(ptxdesc, 0);
+	} else
+		SET_TX_DESC_SW_SEQ_8822E(ptxdesc, pattrib->seqnum);
 
-	/* injected frame */
-	if (pattrib->inject == 0xa5) {
-		/* Prevent sequence number from being overwritten */
-		SET_TX_DESC_EN_HWSEQ_8822E(ptxdesc, 0); /* Hw do not set sequence number */
-		SET_TX_DESC_SW_SEQ_8822E(ptxdesc, pattrib->seqnum); /* Copy inject sequence number to TxDesc */
-
-		SET_TX_DESC_RTY_LMT_EN_8822E(ptxdesc, 1);
-
-		if (pattrib->retry_ctrl == _TRUE) {
-			SET_TX_DESC_RTS_DATA_RTY_LMT_8822E(ptxdesc, 6); // todo: idk if it's the correct api
-		} else {
-			SET_TX_DESC_RTS_DATA_RTY_LMT_8822E(ptxdesc, 0);
-		}
-		if (pattrib->sgi == _TRUE) {
-			SET_TX_DESC_DATA_SHORT_8822E(ptxdesc, 1);
-		} else {
-			SET_TX_DESC_DATA_SHORT_8822E(ptxdesc, 0);
-		}
-
-		// ?
-		//SET_TX_DESC_DISABLE_FB_8812(ptxdesc, 1); // svpcom: ?
-		SET_TX_DESC_DISDATAFB_8822E(ptxdesc, 1);   // ?
-		SET_TX_DESC_DISRTSFB_8822E(ptxdesc, 1);	   // See issue #2
-
-		SET_TX_DESC_USE_RATE_8822E(ptxdesc, 1);
-		SET_TX_DESC_DATARATE_8822E(ptxdesc, MRateToHwRate(pattrib->rate));
-
-		if (pattrib->ldpc) {
-			SET_TX_DESC_DATA_LDPC_8822E(ptxdesc, 1);
-		}
-		SET_TX_DESC_DATA_STBC_8822E(ptxdesc, pattrib->stbc & 3);
-		SET_TX_DESC_DATA_BW_8822E(ptxdesc, pattrib->bwmode); // 0 - 20 MHz, 1 - 40 MHz, 2 - 80 MHz
-
-	} else if ((pxmitframe->frame_tag & 0x0f) == DATA_FRAMETAG) {
+	if ((pxmitframe->frame_tag & 0x0f) == DATA_FRAMETAG) {
 		/* RTW_INFO("pxmitframe->frame_tag == DATA_FRAMETAG\n");	*/
 		rtl8822e_fill_txdesc_sectype(pattrib, ptxdesc);
 #ifdef CONFIG_TCP_CSUM_OFFLOAD_TX
-		if (pattrib->hw_csum == 1) {
-			int offset = 48 + pxmitframe->pkt_offset*8 + 24;
+	if (pattrib->hw_csum == 1) {
+		int offset = 48 + pxmitframe->pkt_offset*8 + 24;
 
-			SET_TX_DESC_OFFSET_8822E(ptxdesc, offset);
-			SET_TX_DESC_CHK_EN_8822E(ptxdesc, 1);
-			SET_TX_DESC_WHEADER_LEN_8822E(ptxdesc, (pattrib->hdrlen + pattrib->iv_len + XATTRIB_GET_MCTRL_LEN(pattrib))>>1);
-		}
+		SET_TX_DESC_OFFSET_8822E(ptxdesc, offset);
+		SET_TX_DESC_CHK_EN_8822E(ptxdesc, 1);
+		SET_TX_DESC_WHEADER_LEN_8822E(ptxdesc, (pattrib->hdrlen + pattrib->iv_len + XATTRIB_GET_MCTRL_LEN(pattrib))>>1);
+	}
 #endif
 
 		/* offset 20 */
@@ -890,6 +853,7 @@ static void rtl8822eu_xmit_tasklet(unsigned long priv)
 	int ret = _FALSE;
 	_adapter *padapter = (_adapter *)priv;
 	struct xmit_priv *pxmitpriv = &padapter->xmitpriv;
+	struct pwrctrl_priv *pwrpriv = adapter_to_pwrctl(padapter);
 
 	while (1) {
 		if (RTW_CANNOT_TX(padapter)) {
@@ -899,6 +863,13 @@ static void rtl8822eu_xmit_tasklet(unsigned long priv)
 
 		if (rtw_xmit_ac_blocked(padapter) == _TRUE)
 			break;
+
+		if (pwrpriv->bInSuspend == _TRUE) {
+		#ifdef DBG_TX_DROP_FRAME
+			RTW_INFO("DBG_TX_DROP_FRAME %s in suspend flow\n", __FUNCTION__);
+		#endif
+			break;
+		}
 
 		ret = rtl8822eu_xmitframe_complete(padapter, pxmitpriv, NULL);
 

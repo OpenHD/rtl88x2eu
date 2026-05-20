@@ -21,7 +21,7 @@
 #define HALMAC_MAJOR_VER        1
 #define HALMAC_PROTOTYPE_VER    6
 #define HALMAC_MINOR_VER        7
-#define HALMAC_PATCH_VER        12
+#define HALMAC_PATCH_VER        17
 
 #define HALMAC_88XX_SUPPORT	(HALMAC_8821C_SUPPORT || \
 				 HALMAC_8822B_SUPPORT || \
@@ -111,6 +111,7 @@
 #if HALMAC_DBG_MONITOR_IO
 #include "halmac_dbg.h"
 #endif
+#include "halmac_dbg_cmd.h"
 #include "halmac_tx_desc_chip.h"
 #include "halmac_rx_desc_chip.h"
 #include "halmac_tx_desc_buffer_chip.h"

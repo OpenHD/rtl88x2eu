@@ -42,15 +42,17 @@ u8 phydm_env_mntr_get_802_11_k_rsni(void *dm_void, s8 rcpi, s8 anpi)
 
 	if (rcpi <= anpi)
 		signal = 0;
-	else if (rcpi - anpi >= 117)
-		signal = 117;
-	else
-		signal = rcpi - anpi;
+	else {
+    		signal = (u8)(rcpi - anpi);
+    		if (signal > 117)
+       			 signal = 117;
+    		
+	}
 
 	if (signal < 13)
 		rsni = sig_to_rsni[signal];
 	else
-		rsni = 2 * (signal + 10);
+		rsni = (u8)(2 * (signal + 10));
 
 	return rsni;
 }
@@ -510,15 +512,15 @@ phydm_nhm_th_update_chk(void *dm_void, enum nhm_application nhm_app, u8 *nhm_th,
 	/*11k_gain_idx : {18, 21, 24, 27, 30, 35, 40, 45, 50, 55, 60};*/
 
 	u8 i = 0;
-	u8 th_tmp = igi_curr - CCA_CAP;
 	u8 th_step = 2;
+	u8 th_tmp;
+	if (igi_curr < 0x10) /* Protect for invalid IGI*/
+		return false;
+	th_tmp = igi_curr - CCA_CAP;
 
 	PHYDM_DBG(dm, DBG_ENV_MNTR, "[%s]===>\n", __func__);
 	PHYDM_DBG(dm, DBG_ENV_MNTR, "App=%d, nhm_igi=0x%x, igi_curr=0x%x\n",
 		  nhm_app, ccx->nhm_igi, igi_curr);
-
-	if (igi_curr < 0x10) /* Protect for invalid IGI*/
-		return false;
 
 	switch (nhm_app) {
 	case NHM_BACKGROUND: /* @Get IGI form driver parameter(cur_ig_value)*/
@@ -2143,18 +2145,20 @@ phydm_fahm_th_update_chk(void *dm_void, enum fahm_application fahm_app,
 	boolean is_update = false;
 	u8 igi_curr = phydm_get_igi(dm, BB_PATH_A);
 	u8 i = 0;
-	u8 th_tmp = igi_curr - CCA_CAP;
+	u8 th_tmp;
 	u8 th_step = 2;
 	u8 fahm_igi_th_11k[NHM_TH_NUM] = {0x12, 0x15, 0x18, 0x1b, 0x1e, 0x23,
 					  0x28, 0x2d, 0x32, 0x37, 0x3c};
 	/*11k_dbm : {-92, -89, -86, -83, -80, -75, -70, -65, -60, -55, -50};*/
 	/*11k_gain_idx : {18, 21, 24, 27, 30, 35, 40, 45, 50, 55, 60};*/
+	
+	if (igi_curr < 0x10) /* Protect for invalid IGI*/
+		return false;
+
+	th_tmp = igi_curr - CCA_CAP;
 
 	PHYDM_DBG(dm, DBG_ENV_MNTR, "fahm_th_update_chk : App=%d, fahm_igi=0x%x, igi_curr=0x%x\n",
 		  fahm_app, ccx->fahm_igi, igi_curr);
-
-	if (igi_curr < 0x10) /* Protect for invalid IGI*/
-		return false;
 
 	switch (fahm_app) {
 	case FAHM_BACKGROUND: /*Get IGI from driver parameter(cur_ig_value)*/

@@ -54,10 +54,12 @@
 
 #endif
 
+#if 0
 #if defined(CONFIG_MCC_MODE) && defined(CONFIG_BT_COEXIST)
 
 	#error "Disable BT COEXIST before enable MCC MODE\n"
 
+#endif
 #endif
 
 #if defined(CONFIG_MCC_MODE) && defined(CONFIG_TDLS)
@@ -80,13 +82,13 @@
 /* Default enable single wiphy if driver ver >= 5.9 */
 #define RTW_SINGLE_WIPHY
 
-#if (defined(__ANDROID_COMMON_KERNEL__) && !defined(CONFIG_RTW_ANDROID))
-	#error "Set CONFIG_RTW_ANDROID in Makefile while build with Android Common Kernel!!"
-#endif
-
 #ifdef CONFIG_RTW_ANDROID
 
 	#include <linux/version.h>
+
+	#ifndef __ANDROID_COMMON_KERNEL__
+	#define __ANDROID_COMMON_KERNEL__
+	#endif
 
 	#ifndef CONFIG_PLATFORM_ANDROID
 	#define CONFIG_PLATFORM_ANDROID
@@ -223,7 +225,7 @@
 #endif
 
 #ifdef CONFIG_WIFI_MONITOR
-	#define CONFIG_MONITOR_MODE_XMIT	
+	#define CONFIG_MONITOR_MODE_XMIT
 #endif
 
 #ifdef CONFIG_CUSTOMER_ALIBABA_GENERAL

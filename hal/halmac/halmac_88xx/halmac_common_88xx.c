@@ -320,7 +320,7 @@ dl_rsvd_page_88xx(struct halmac_adapter *adapter, u16 pg_addr, u8 *buf,
 	u8 restore[2];
 	u8 value8;
 	u16 rsvd_pg_head;
-	u32 cnt;
+	u32 cnt, diff_cnt;
 	enum halmac_rsvd_pg_state *state = &adapter->halmac_state.rsvd_pg_state;
 	struct halmac_api *api = (struct halmac_api *)adapter->halmac_api;
 	enum halmac_ret_status status = HALMAC_RET_SUCCESS;
@@ -354,16 +354,21 @@ dl_rsvd_page_88xx(struct halmac_adapter *adapter, u16 pg_addr, u8 *buf,
 		goto DL_RSVD_PG_END;
 	}
 
-	cnt = 1000;
+	cnt = 100000;
+	diff_cnt = 0;
 	while (!(HALMAC_REG_R8(REG_FIFOPAGE_CTRL_2 + 1) & BIT(7))) {
 		PLTFM_DELAY_US(10);
 		cnt--;
+		diff_cnt ++;
 		if (cnt == 0) {
 			PLTFM_MSG_ERR("[ERR]bcn valid!!\n");
 			status = HALMAC_RET_POLLING_BCN_VALID_FAIL;
 			break;
 		}
 	}
+	if (diff_cnt >= 1000)
+		PLTFM_MSG_WARN("[WARN] %s cnt=%d, diff_cnt>=1000(%d)\n", __func__, cnt, diff_cnt);
+
 DL_RSVD_PG_END:
 	rsvd_pg_head = adapter->txff_alloc.rsvd_boundary;
 	HALMAC_REG_W16(REG_FIFOPAGE_CTRL_2, rsvd_pg_head | BIT(15));

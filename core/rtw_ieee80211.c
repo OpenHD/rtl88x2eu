@@ -1804,8 +1804,8 @@ ParseRes rtw_ieee802_11_parse_elems(u8 *start, uint len,
 
 }
 
-static u8 key_char2num(u8 ch);
-static u8 key_char2num(u8 ch)
+u8 key_char2num(u8 ch);
+u8 key_char2num(u8 ch)
 {
 	if ((ch >= '0') && (ch <= '9'))
 		return ch - '0';
@@ -2103,7 +2103,7 @@ void dump_ies(void *sel, const u8 *buf, u32 buf_len)
 }
 
 /**
- * rtw_ies_get_chbw - get operation ch, bw, offset from IEs of BSS.
+ * _rtw_ies_get_ch_settings - get operation ch, bw, offset from IEs of BSS.
  * @ies: pointer of the first tlv IE
  * @ies_len: length of @ies
  * @ch: pointer of ch, used as output
@@ -2112,15 +2112,14 @@ void dump_ies(void *sel, const u8 *buf, u32 buf_len)
  * @ht: check HT IEs
  * @vht: check VHT IEs, if true imply ht is true
  */
-#if CONFIG_ALLOW_FUNC_2G_5G_ONLY
-RTW_FUNC_2G_5G_ONLY void rtw_ies_get_chbw(u8 *ies, int ies_len, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht)
+static void _rtw_ies_get_ch_settings(u8 *ies, int ies_len, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht)
 {
 	u8 *p;
-	int	ie_len;
+	int ie_len;
 
 	*ch = 0;
 	*bw = CHANNEL_WIDTH_20;
-	*offset = HAL_PRIME_CHNL_OFFSET_DONT_CARE;
+	*offset = CHAN_OFFSET_NO_EXT;
 
 	p = rtw_get_ie(ies, _DSSET_IE_, &ie_len, ies_len);
 	if (p && ie_len > 0)
@@ -2151,11 +2150,11 @@ RTW_FUNC_2G_5G_ONLY void rtw_ies_get_chbw(u8 *ies, int ies_len, u8 *ch, u8 *bw, 
 
 			if (*bw == CHANNEL_WIDTH_40) {
 				switch (GET_HT_OP_ELE_2ND_CHL_OFFSET(ht_op_ie + 2)) {
-				case SCA:
-					*offset = HAL_PRIME_CHNL_OFFSET_LOWER;
+				case IEEE80211_SCA:
+					*offset = CHAN_OFFSET_UPPER;
 					break;
-				case SCB:
-					*offset = HAL_PRIME_CHNL_OFFSET_UPPER;
+				case IEEE80211_SCB:
+					*offset = CHAN_OFFSET_LOWER;
 					break;
 				}
 			}
@@ -2168,21 +2167,33 @@ RTW_FUNC_2G_5G_ONLY void rtw_ies_get_chbw(u8 *ies, int ies_len, u8 *ch, u8 *bw, 
 
 			vht_op_ie = rtw_get_ie(ies, EID_VHTOperation, &vht_op_ielen, ies_len);
 			if (vht_op_ie && vht_op_ielen) {
-				if (GET_VHT_OPERATION_ELE_CHL_WIDTH(vht_op_ie + 2) >= 1)
+				if (GET_VHT_OPERATION_ELE_CHL_WIDTH(vht_op_ie + 2) >= 1) {
 					*bw = CHANNEL_WIDTH_80;
+					/*
+					Correcting offset if *offset==HAL_PRIME_CHNL_OFFSET_DONT_CARE.
+					AP may support BW 80 for VHT, but only support BW 20 for HT, resulting in no offset being set.
+					*/
+					if (*offset == CHAN_OFFSET_NO_EXT && !rtw_get_offset_by_chbw(*ch, *bw, offset)) {
+						RTW_INFO("%s get channel offset fail, chan=%u, bw=%u\n",
+							__func__, *ch, *bw);
+					}
+				}
 			}
 		}
 #endif /* CONFIG_80211AC_VHT */
-
 	}
 #endif /* CONFIG_80211N_HT */
 }
-#endif
 
-void rtw_bss_get_chbw(WLAN_BSSID_EX *bss, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht)
+#if CONFIG_ALLOW_FUNC_2G_5G_ONLY
+RTW_FUNC_2G_5G_ONLY void rtw_ies_get_chbw(u8 *ies, int ies_len, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht)
 {
-	rtw_ies_get_chbw(bss->IEs + sizeof(NDIS_802_11_FIXED_IEs)
-		, bss->IELength - sizeof(NDIS_802_11_FIXED_IEs)
+	_rtw_ies_get_ch_settings(ies, ies_len, ch, bw, offset, ht, vht);
+}
+
+RTW_FUNC_2G_5G_ONLY void rtw_bss_get_chbw(WLAN_BSSID_EX *bss, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht)
+{
+	_rtw_ies_get_ch_settings(BSS_EX_TLV_IES(bss), BSS_EX_TLV_IES_LEN(bss)
 		, ch, bw, offset, ht, vht);
 
 	if (*ch == 0)
@@ -2194,6 +2205,7 @@ void rtw_bss_get_chbw(WLAN_BSSID_EX *bss, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 
 		rtw_warn_on(1);
 	}
 }
+#endif
 
 #ifdef CONFIG_P2P
 /**

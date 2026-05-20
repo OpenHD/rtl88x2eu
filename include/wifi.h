@@ -36,13 +36,13 @@
 #define WLAN_HDR_A3_QOS_LEN	26
 #define WLAN_HDR_A4_QOS_LEN	32
 #define WLAN_SSID_MAXLEN	32
-#define WLAN_DATA_MAXLEN	8192
+#define WLAN_DATA_MAXLEN	2312
 
 #define WLAN_A3_PN_OFFSET	24
 #define WLAN_A4_PN_OFFSET	30
 
 #define WLAN_MIN_ETHFRM_LEN	60
-#define WLAN_MAX_ETHFRM_LEN	8192
+#define WLAN_MAX_ETHFRM_LEN	1514
 #define WLAN_ETHHDR_LEN		14
 #define WLAN_WMM_LEN		24
 #define VENDOR_NAME_LEN		20
@@ -853,6 +853,7 @@ struct ieee80211_ht_addt_info {
 } __attribute__((packed));
 #endif
 
+#define HT_CAPS_IE_LEN 26 /*struct rtw_ieee80211_ht_cap */
 struct HT_caps_element {
 	union {
 		struct {
@@ -863,7 +864,7 @@ struct HT_caps_element {
 			unsigned int	Beamforming_caps;
 			unsigned char	ASEL_caps;
 		} HT_cap_element;
-		unsigned char HT_cap[26];
+		unsigned char HT_cap[HT_CAPS_IE_LEN];
 	} u;
 } __attribute__((packed));
 

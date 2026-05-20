@@ -2531,8 +2531,14 @@ static u32 _rtw_wait_join_done(_adapter *adapter, u8 abort, u32 timeout_ms)
 {
 	systime start;
 	u32 pass_ms;
-	struct mlme_priv *pmlmepriv = &(adapter->mlmepriv);
 	struct mlme_ext_priv *pmlmeext = &(adapter->mlmeextpriv);
+
+	if (!MLME_IS_LINKING(adapter)
+		#ifdef CONFIG_IOCTL_CFG80211
+		&& !rtw_cfg80211_is_connect_requested(adapter)
+		#endif
+	)
+		return 0;
 
 	start = rtw_get_current_time();
 
@@ -2541,7 +2547,7 @@ static u32 _rtw_wait_join_done(_adapter *adapter, u8 abort, u32 timeout_ms)
 		set_link_timer(pmlmeext, 1);
 
 	while (rtw_get_passing_time_ms(start) <= timeout_ms
-		&& (check_fwstate(pmlmepriv, WIFI_UNDER_LINKING)
+		&& (MLME_IS_LINKING(adapter)
 			#ifdef CONFIG_IOCTL_CFG80211
 			|| rtw_cfg80211_is_connect_requested(adapter)
 			#endif
@@ -2555,7 +2561,7 @@ static u32 _rtw_wait_join_done(_adapter *adapter, u8 abort, u32 timeout_ms)
 	}
 
 	if (abort) {
-		if (check_fwstate(pmlmepriv, WIFI_UNDER_LINKING)
+		if (MLME_IS_LINKING(adapter)
 			#ifdef CONFIG_IOCTL_CFG80211
 			|| rtw_cfg80211_is_connect_requested(adapter)
 			#endif
@@ -3447,7 +3453,9 @@ void rtw_join_timeout_handler(void *ctx)
 {
 	_adapter *adapter = (_adapter *)ctx;
 	_irqL irqL;
-	struct	mlme_priv *pmlmepriv = &adapter->mlmepriv;
+	struct mlme_priv *pmlmepriv = &adapter->mlmepriv;
+	struct mlme_ext_priv *pmlmeext = &adapter->mlmeextpriv;
+	struct mlme_ext_info *pmlmeinfo = &(pmlmeext->mlmext_info);
 
 #if 0
 	if (rtw_is_drv_stopped(adapter)) {
@@ -3504,6 +3512,7 @@ void rtw_join_timeout_handler(void *ctx)
 	}
 
 	pmlmepriv->join_status = 0; /* reset */
+	pmlmeinfo->state = 0; /* clear WIFI_FW_STATE */
 
 	_exit_critical_bh(&pmlmepriv->lock, &irqL);
 
@@ -4366,30 +4375,38 @@ candidate_exist:
 
 #if defined(CONFIG_CONCURRENT_MODE) && defined(CONFIG_AP_MODE)
 {
-	u8 ifbmp = 0;
-	u8 csa_cnt;
-	struct mi_state mstate;
-	struct rf_ctl_t *rfctl;
+#ifdef CONFIG_MCC_MODE
+	if (!MCC_EN(adapter)) {
+#endif
+		u8 ifbmp = 0;
+		u8 csa_cnt;
+		struct mi_state mstate;
+		struct rf_ctl_t *rfctl;
 
-	rfctl = adapter_to_rfctl(adapter);
-	csa_cnt = rfctl->ap_csa_cnt_input;
-	ifbmp = rtw_mi_get_ap_mesh_ifbmp(adapter);
-	rtw_mi_status_no_self(adapter, &mstate);
+		rfctl = adapter_to_rfctl(adapter);
+		csa_cnt = rfctl->ap_csa_cnt_input;
+		ifbmp = rtw_mi_get_ap_mesh_ifbmp(adapter);
+		rtw_mi_status_no_self(adapter, &mstate);
 
-	if (csa_cnt > 0 && ifbmp && MSTATE_AP_LD_NUM(&mstate) &&
-		rtw_mi_get_union_chan(adapter) != candidate->network.Configuration.DSConfig) {
-		rfctl->ap_csa_en = CSA_STA_JOINBSS;
-		rfctl->ap_csa_wait_update_bcn = 0;
-		rfctl->ap_csa_switch_cnt = csa_cnt;
-		rtw_bss_get_chbw(&(candidate->network), &rfctl->ap_csa_ch
-			, &rfctl->ap_csa_ch_width, &rfctl->ap_csa_ch_offset, 1, 1);
-		rtw_set_ap_csa_cmd(adapter);
+		if (csa_cnt > 0 && ifbmp && MSTATE_AP_LD_NUM(&mstate) &&
+			rtw_mi_get_union_chan(adapter) != candidate->network.Configuration.DSConfig) {
+			rfctl->ap_csa_en = CSA_STA_JOINBSS;
+			rfctl->ap_csa_wait_update_bcn = 0;
+			rfctl->ap_csa_switch_cnt = csa_cnt;
+			rtw_bss_get_chbw(&(candidate->network), &rfctl->ap_csa_ch
+				, &rfctl->ap_csa_ch_width, &rfctl->ap_csa_ch_offset, 1, 1);
+			rtw_set_ap_csa_cmd(adapter);
 
-		/* Store candidata network until softap switch channel done */
-		_rtw_memcpy(&(pmlmepriv->candidate_network), candidate, sizeof(struct wlan_network));
-		ret = _SUCCESS;
-		goto exit;
+			/* Store candidata network until softap switch channel done */
+			_rtw_memcpy(&(pmlmepriv->candidate_network), candidate, sizeof(struct wlan_network));
+			ret = _SUCCESS;
+			goto exit;
+		}
+#ifdef CONFIG_MCC_MODE
+	} else {
+		RTW_INFO("[MCC] bypass CSA for MCC\n");
 	}
+#endif
 }
 #endif
 
@@ -5072,6 +5089,9 @@ unsigned int rtw_restructure_ht_ie(_adapter *padapter, u8 *in_ie, u8 *out_ie, ui
 	struct mlme_ext_info	*pmlmeinfo = &(pmlmeext->mlmext_info);
 	struct vht_priv	*pvhtpriv = &pmlmepriv->vhtpriv;
 #endif /* CONFIG_80211AC_VHT */
+#if defined(CONFIG_USB_HCI) && defined(RTW_RX_AGGREGATION)
+	HAL_DATA_TYPE *hal = GET_HAL_DATA(padapter);
+#endif
 
 	phtpriv->ht_option = _FALSE;
 
@@ -5239,6 +5259,14 @@ unsigned int rtw_restructure_ht_ie(_adapter *padapter, u8 *in_ie, u8 *out_ie, ui
 			RTW_INFO("%s IEEE80211_HT_CAP_MAX_AMSDU is set\n", __FUNCTION__);
 			ht_capie.cap_info = ht_capie.cap_info | IEEE80211_HT_CAP_MAX_AMSDU;
 		}
+#if defined(CONFIG_USB_HCI) && defined(RTW_RX_AGGREGATION)
+		if (hal->rxagg_mode ==  RX_AGG_USB && pregistrypriv->rx_ampdu_amsdu == 1) {
+			if (ht_capie.cap_info & IEEE80211_HT_CAP_MAX_AMSDU) {
+				ht_capie.cap_info = ht_capie.cap_info & (~IEEE80211_HT_CAP_MAX_AMSDU);
+				RTW_INFO("[HT] AMSDU size is 3839 bytes\n");
+			}
+		}
+#endif
 	}
 	/*
 	AMPDU_para [1:0]:Max AMPDU Len => 0:8k , 1:16k, 2:32k, 3:64k

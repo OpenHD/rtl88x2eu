@@ -315,7 +315,6 @@ static struct usb_device_id rtw_usb_id_tbl[] = {
 	{USB_DEVICE_AND_INTERFACE_INFO(USB_VENDER_ID_REALTEK, 0xE822, 0xff, 0xff, 0xff), .driver_info = RTL8822E}, /* Default ID for USB multi-function */
 	{USB_DEVICE_AND_INTERFACE_INFO(USB_VENDER_ID_REALTEK, 0xA82A, 0xff, 0xff, 0xff), .driver_info = RTL8822E}, /* Default ID for USB multi-function */
 	{USB_DEVICE_AND_INTERFACE_INFO(USB_VENDER_ID_REALTEK, 0xA81A, 0xff, 0xff, 0xff), .driver_info = RTL8822E}, /* 8812EU */
-	{USB_DEVICE(USB_VENDER_ID_REALTEK, 0xA81A), .driver_info = RTL8822E}, /* Match even if interface descriptors are not vendor-specific */
 #endif /* CONFIG_RTL8822E */
 
 
@@ -356,10 +355,10 @@ struct rtw_usb_drv usb_drv = {
 	.usbdrv.reset_resume   = rtw_resume,
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 19)) && (LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0))
-	.usbdrv.drvwrap.driver.shutdown = rtw_dev_shutdown,
-#else
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)) || (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19))
 	.usbdrv.driver.shutdown = rtw_dev_shutdown,
+#else
+	.usbdrv.drvwrap.driver.shutdown = rtw_dev_shutdown,
 #endif
 };
 
@@ -566,11 +565,6 @@ static struct dvobj_priv *usb_dvobj_init(struct usb_interface *usb_intf, const s
 	/* pdvobjpriv->nr_endpoint = 6; */
 
 	pdev_desc = &pusbd->descriptor;
-	printk(KERN_INFO DRV_NAME": usb_dvobj_init: dev=%u-%u vid=%04x pid=%04x bcd=%04x speed=%d configs=%u\n",
-	       pusbd->bus->busnum, pusbd->devnum,
-	       le16_to_cpu(pdev_desc->idVendor), le16_to_cpu(pdev_desc->idProduct),
-	       le16_to_cpu(pdev_desc->bcdDevice), pusbd->speed,
-	       pdev_desc->bNumConfigurations);
 
 #if 0
 	RTW_INFO("\n8712_usb_device_descriptor:\n");
@@ -598,10 +592,6 @@ static struct dvobj_priv *usb_dvobj_init(struct usb_interface *usb_intf, const s
 
 	phost_iface = &usb_intf->altsetting[0];
 	piface_desc = &phost_iface->desc;
-	printk(KERN_INFO DRV_NAME": usb_dvobj_init: intf=%u alt=%u class=%02x subclass=%02x proto=%02x endpoints=%u\n",
-	       piface_desc->bInterfaceNumber, piface_desc->bAlternateSetting,
-	       piface_desc->bInterfaceClass, piface_desc->bInterfaceSubClass,
-	       piface_desc->bInterfaceProtocol, piface_desc->bNumEndpoints);
 
 	pdvobjpriv->nr_endpoint = piface_desc->bNumEndpoints;
 
@@ -611,9 +601,6 @@ static struct dvobj_priv *usb_dvobj_init(struct usb_interface *usb_intf, const s
 		phost_endp = phost_iface->endpoint + i;
 		if (phost_endp) {
 			pendp_desc = &phost_endp->desc;
-			printk(KERN_INFO DRV_NAME": usb_dvobj_init: ep%d addr=0x%02x attr=0x%02x maxpkt=%u interval=%u\n",
-			       i, pendp_desc->bEndpointAddress, pendp_desc->bmAttributes,
-			       le16_to_cpu(pendp_desc->wMaxPacketSize), pendp_desc->bInterval);
 
 			RTW_INFO("\nusb_endpoint_descriptor(%d):\n", i);
 			RTW_INFO("bLength=%x\n", pendp_desc->bLength);
@@ -643,9 +630,6 @@ static struct dvobj_priv *usb_dvobj_init(struct usb_interface *usb_intf, const s
 	}
 
 	RTW_INFO("nr_endpoint=%d, in_num=%d, out_num=%d\n\n", pdvobjpriv->nr_endpoint, pdvobjpriv->RtNumInPipes, pdvobjpriv->RtNumOutPipes);
-	printk(KERN_INFO DRV_NAME": usb_dvobj_init: pipes in=%u out=%u nr_endpoint=%u\n",
-	       pdvobjpriv->RtNumInPipes, pdvobjpriv->RtNumOutPipes,
-	       pdvobjpriv->nr_endpoint);
 
 	switch (pusbd->speed) {
 	case USB_SPEED_LOW:
@@ -1326,20 +1310,11 @@ static int rtw_drv_init(struct usb_interface *pusb_intf, const struct usb_device
 	_adapter *padapter = NULL;
 	int status = _FAIL;
 	struct dvobj_priv *dvobj;
-	struct usb_device *udev = interface_to_usbdev(pusb_intf);
-	struct usb_interface_descriptor *idesc = &pusb_intf->cur_altsetting->desc;
 #ifdef CONFIG_CONCURRENT_MODE
 	int i;
 #endif
 
 	/* RTW_INFO("+rtw_drv_init\n"); */
-	printk(KERN_INFO DRV_NAME": probe start: dev=%u-%u vid=%04x pid=%04x intf=%u class=%02x subclass=%02x proto=%02x driver_info=0x%lx\n",
-	       udev->bus->busnum, udev->devnum,
-	       le16_to_cpu(udev->descriptor.idVendor),
-	       le16_to_cpu(udev->descriptor.idProduct),
-	       idesc->bInterfaceNumber, idesc->bInterfaceClass,
-	       idesc->bInterfaceSubClass, idesc->bInterfaceProtocol,
-	       (unsigned long)pdid->driver_info);
 
 	/* step 0. */
 	process_spec_devid(pdid);
@@ -1347,21 +1322,17 @@ static int rtw_drv_init(struct usb_interface *pusb_intf, const struct usb_device
 	/* Initialize dvobj_priv */
 	dvobj = usb_dvobj_init(pusb_intf, pdid);
 	if (dvobj == NULL) {
-		printk(KERN_ERR DRV_NAME": probe failed: usb_dvobj_init returned NULL\n");
 		goto exit;
 	}
 
 	padapter = rtw_usb_primary_adapter_init(dvobj, pusb_intf);
 	if (padapter == NULL) {
-		printk(KERN_ERR DRV_NAME": probe failed: rtw_usb_primary_adapter_init returned NULL\n");
 		RTW_INFO("rtw_usb_primary_adapter_init Failed!\n");
 		goto free_dvobj;
 	}
 
-	if (usb_reprobe_switch_usb_mode(padapter) == _TRUE) {
-		printk(KERN_INFO DRV_NAME": probe stopped: usb_reprobe_switch_usb_mode requested reprobe\n");
+	if (usb_reprobe_switch_usb_mode(padapter) == _TRUE)
 		goto free_if_prim;
-	}
 
 #ifdef CONFIG_CONCURRENT_MODE
 	if (padapter->registrypriv.virtual_iface_num > (CONFIG_IFACE_NUMBER - 1))
@@ -1397,8 +1368,6 @@ static int rtw_drv_init(struct usb_interface *pusb_intf, const struct usb_device
 
 
 	status = _SUCCESS;
-	printk(KERN_INFO DRV_NAME": probe success: ifaces=%u mac=%pM\n",
-	       dvobj->iface_nums, adapter_mac_addr(padapter));
 
 #if 0 /* not used now */
 os_ndevs_deinit:
@@ -1407,7 +1376,6 @@ os_ndevs_deinit:
 #endif
 free_if_vir:
 	if (status != _SUCCESS) {
-		printk(KERN_ERR DRV_NAME": probe cleanup: status failed after adapter init\n");
 		#ifdef CONFIG_CONCURRENT_MODE
 		rtw_drv_stop_vir_ifaces(dvobj);
 		rtw_drv_free_vir_ifaces(dvobj);
@@ -1422,8 +1390,6 @@ free_dvobj:
 	if (status != _SUCCESS)
 		usb_dvobj_deinit(pusb_intf);
 exit:
-	if (status != _SUCCESS)
-		printk(KERN_ERR DRV_NAME": probe end: returning -ENODEV\n");
 	return status == _SUCCESS ? 0 : -ENODEV;
 }
 
@@ -1502,7 +1468,6 @@ static int __init rtw_drv_entry(void)
 {
 	int ret = 0;
 
-	printk(KERN_INFO DRV_NAME": module init start\n");
 	RTW_PRINT("module init start\n");
 	dump_drv_version(RTW_DBGDUMP);
 #ifdef BTCOEXVERSION
@@ -1530,7 +1495,6 @@ static int __init rtw_drv_entry(void)
 	rtw_inetaddr_notifier_register();
 
 	ret = usb_register(&usb_drv.usbdrv);
-	printk(KERN_INFO DRV_NAME": usb_register ret=%d\n", ret);
 
 	if (ret != 0) {
 		usb_drv.drv_registered = _FALSE;
@@ -1546,7 +1510,6 @@ static int __init rtw_drv_entry(void)
 	}
 
 exit:
-	printk(KERN_INFO DRV_NAME": module init ret=%d\n", ret);
 	RTW_PRINT("module init ret=%d\n", ret);
 	return ret;
 }

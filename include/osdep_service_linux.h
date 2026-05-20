@@ -54,7 +54,6 @@
 #include <linux/ip.h>
 #include <linux/kthread.h>
 #include <linux/list.h>
-#include <linux/timer.h>
 #include <linux/vmalloc.h>
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
@@ -155,12 +154,13 @@
 #endif
 
 /*
- * MLD related cfg80211 patches exist in Android common 5.15 kernels, but
- * generic distro 5.15.y kernels do not carry those API changes.
+ * MLD related linux kernel patch in
+ * Android Common Kernel android13-5.15
+ * refs/heads/common-android13-5.15-2023-04 (5.15.94)
+ * refs/heads/android13-5.15-lts (5.15.106)
  */
-#if defined(CONFIG_RTW_ANDROID) && (CONFIG_RTW_ANDROID > 0) && \
-	(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 94))
-	#define CONFIG_MLD_KERNEL_PATCH
+#if (defined(__ANDROID_COMMON_KERNEL__) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 94)))
+        #define CONFIG_ACK_5_15_LTS_KERNEL
 #endif
 
 typedef struct	semaphore _sema;
@@ -371,7 +371,7 @@ static inline void timer_hdl(unsigned long cntx)
 #endif
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
-	_timer *ptimer = container_of(in_timer, _timer, timer);
+	_timer *ptimer = from_timer(ptimer, in_timer, timer);
 #else
 	_timer *ptimer = (_timer *)cntx;
 #endif
@@ -405,20 +405,12 @@ __inline static void _set_timer(_timer *ptimer, u32 delay_time)
 
 __inline static void _cancel_timer(_timer *ptimer, u8 *bcancelled)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
-	*bcancelled = timer_delete_sync(&ptimer->timer) == 1 ? 1 : 0;
-#else
 	*bcancelled = del_timer_sync(&ptimer->timer) == 1 ? 1 : 0;
-#endif
 }
 
 __inline static void _cancel_timer_async(_timer *ptimer)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
-	timer_delete(&ptimer->timer);
-#else
 	del_timer(&ptimer->timer);
-#endif
 }
 
 static inline void _init_workitem(_workitem *pwork, void *pfunc, void *cntx)
@@ -612,4 +604,27 @@ extern struct net_device *rtw_alloc_etherdev(int sizeof_priv);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0))
 #define dev_addr_mod(dev, offset, addr, len) _rtw_memcpy(&dev->dev_addr[offset], addr, len)
 #endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+/* This defines the direction arg to the DMA mapping routines. */
+#define PCI_DMA_BIDIRECTIONAL	DMA_BIDIRECTIONAL
+#define PCI_DMA_TODEVICE	DMA_TO_DEVICE
+#define PCI_DMA_FROMDEVICE	DMA_FROM_DEVICE
+#define PCI_DMA_NONE		DMA_NONE
+
+#define pci_alloc_consistent(pcidev, size, dma_handle) \
+	dma_alloc_coherent(&(pcidev)->dev, size, dma_handle, GFP_ATOMIC)
+#define pci_free_consistent(pcidev, size, vaddr, dma_handle) \
+	dma_free_coherent(&(pcidev)->dev, size, vaddr, dma_handle)
+#define pci_map_single(pcidev, ptr, size, direction) \
+	dma_map_single(&(pcidev)->dev, ptr, size, (enum dma_data_direction)direction)
+#define pci_unmap_single(pcidev, dma_addr, size, direction) \
+	dma_unmap_single(&(pcidev)->dev, dma_addr, size, (enum dma_data_direction)direction)
+#define pci_set_dma_mask(pcidev, mask) \
+	dma_set_mask(&(pcidev)->dev, mask)
+#define pci_set_consistent_dma_mask(pcidev, mask) \
+	dma_set_coherent_mask(&(pcidev)->dev, mask)
+#endif
+
+
 #endif /* __OSDEP_LINUX_SERVICE_H_ */

@@ -177,6 +177,7 @@ halmac_init_adapter(void *drv_adapter, struct halmac_platform_api *pltfm_api,
 	PLTFM_MUTEX_INIT(&adapter->efuse_mutex);
 	PLTFM_MUTEX_INIT(&adapter->h2c_seq_mutex);
 	PLTFM_MUTEX_INIT(&adapter->sdio_indir_mutex);
+	PLTFM_MUTEX_INIT(&adapter->lock_info.fw_dbgcmd_lock);
 
 #if (HALMAC_PLATFORM_WINDOWS == 0)
 
@@ -293,6 +294,7 @@ halmac_deinit_adapter(struct halmac_adapter *adapter)
 	PLTFM_MUTEX_DEINIT(&adapter->efuse_mutex);
 	PLTFM_MUTEX_DEINIT(&adapter->h2c_seq_mutex);
 	PLTFM_MUTEX_DEINIT(&adapter->sdio_indir_mutex);
+	PLTFM_MUTEX_DEINIT(&adapter->lock_info.fw_dbgcmd_lock);
 
 	if (adapter->efuse_map) {
 		PLTFM_FREE(adapter->efuse_map, adapter->hw_cfg_info.efuse_size);

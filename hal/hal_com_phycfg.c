@@ -1226,13 +1226,13 @@ static u8 rtw_get_ch_group(u8 ch, u8 *group, u8 *cck_group)
 	} else {
 		band = BAND_ON_5G;
 
-		if (16 <= ch && ch <= 42)
+		if (36 <= ch && ch <= 42)
 			gp = 0;
 		else if (44   <= ch && ch <=  48)
 			gp = 1;
 		else if (50   <= ch && ch <=  58)
 			gp = 2;
-		else if (60   <= ch && ch <=  98)
+		else if (60   <= ch && ch <=  64)
 			gp = 3;
 		else if (100  <= ch && ch <= 106)
 			gp = 4;
@@ -1252,7 +1252,7 @@ static u8 rtw_get_ch_group(u8 ch, u8 *group, u8 *cck_group)
 			gp = 11;
 		else if (165  <= ch && ch <= 171)
 			gp = 12;
-		else if (173  <= ch && ch <= 253)
+		else if (173  <= ch && ch <= 177)
 			gp = 13;
 		else
 			band = BAND_MAX;
@@ -1329,27 +1329,19 @@ bypass_2g:
 
 		/* 5G base */
 		for (ch_idx = 0; ch_idx < CENTER_CH_5G_ALL_NUM; ch_idx++) {
-			//RTW_WARN("%s 5G base all, ch_idx=%d, %u", __func__, ch_idx, center_ch_5g_all[ch_idx]);
-			if (rtw_get_ch_group(center_ch_5g_all[ch_idx], &group, NULL) != BAND_ON_5G) {
-				RTW_WARN("%s rtw_get_ch_group warn, ch_idx=%d, %u", __func__, ch_idx, center_ch_5g_all[ch_idx]);
+			if (rtw_get_ch_group(center_ch_5g_all[ch_idx], &group, NULL) != BAND_ON_5G)
 				continue;
-			}
 			hal_data->Index5G_BW40_Base[rfpath][ch_idx] = pwr_info_5g->IndexBW40_Base[rfpath][group];
 		}
 
 		for (ch_idx = 0 ; ch_idx < CENTER_CH_5G_80M_NUM; ch_idx++) {
 			u8 upper, lower;
-			//RTW_WARN("%s 5G base all, ch_idx=%d, %u", __func__, ch_idx, center_ch_5g_80m[ch_idx]);
-			if (rtw_get_ch_group(center_ch_5g_80m[ch_idx], &group, NULL) != BAND_ON_5G){
-				RTW_WARN("%s rtw_get_ch_group 80m warn, ch_idx=%d, %u", __func__, ch_idx, center_ch_5g_80m[ch_idx]);
+
+			if (rtw_get_ch_group(center_ch_5g_80m[ch_idx], &group, NULL) != BAND_ON_5G)
 				continue;
-			}
 
 			upper = pwr_info_5g->IndexBW40_Base[rfpath][group];
-			// the max group id seems to be fixed 
-			// see rtw_get_ch_group() with full of magic number
-			lower = pwr_info_5g->IndexBW40_Base[rfpath][group+1>13? group: group+1]; 
-			//RTW_WARN("%s group=%d, upper=%d,lower=%d", __func__, group, upper, lower);
+			lower = pwr_info_5g->IndexBW40_Base[rfpath][group + 1];
 			hal_data->Index5G_BW80_Base[rfpath][ch_idx] = (upper + lower) / 2;
 		}
 
@@ -1471,7 +1463,7 @@ void dump_hal_txpwr_info_5g(void *sel, _adapter *adapter, u8 rfpath_num, u8 max_
 	RTW_PRINT_SEL(sel, "BW40-1S base:\n");
 	do {
 		#define DUMP_5G_BW40_BASE_SECTION_NUM 3
-		u8 end[DUMP_5G_BW40_BASE_SECTION_NUM] = {64, 144, 253};
+		u8 end[DUMP_5G_BW40_BASE_SECTION_NUM] = {64, 144, 177};
 
 		RTW_PRINT_SEL(sel, "%4s ", "");
 		for (ch_idx = ch_idx_s; ch_idx < CENTER_CH_5G_ALL_NUM; ch_idx++) {
@@ -1719,8 +1711,6 @@ static void phy_set_target_txpwr(
 			, RateSection, (Band == BAND_ON_2_4G) ? "2.4" : "5", RfPath);
 		return;
 	}
-
-	Value = get_overridden_tx_power_index(Value);
 
 	if (Band == BAND_ON_2_4G)
 		pHalData->target_txpwr_2g[RfPath][RateSection] = Value;
@@ -2354,8 +2344,6 @@ phy_set_tx_power_index_by_rate_section(
 		goto exit;
 
 	for (i = 0; i < rates_by_sections[rs].rate_num; ++i) {
-		powerIndex = (u32)get_overridden_tx_power_index((u8)powerIndex);
-		// to-do: is that really overrided? thinking when doing copy & paste
 #if DBG_TX_POWER_IDX
 		struct txpwr_idx_comp tic;
 
@@ -4009,7 +3997,6 @@ PHY_SetTxPowerIndex(
 		u8				Rate
 )
 {
-	PowerIndex = (u32)get_overridden_tx_power_index((u8)PowerIndex);
 	rtw_hal_set_tx_power_index(pAdapter, PowerIndex, RFPath, Rate);
 }
 
@@ -6257,7 +6244,7 @@ u8 hal_com_get_txpwr_idx(_adapter *adapter, enum rf_path rfpath
 		base = phy_get_pg_txpwr_idx(adapter, rfpath, rs, ntx_idx, bw, band, cch);
 		rs_target = phy_get_target_txpwr(adapter, band, rfpath, rs);
 		power_idx = base + (rate_target - rs_target) + (rate_amends);
-		power_idx = get_overridden_tx_power_index(power_idx);
+
 		if (tic) {
 			if (tic->utarget == hal_spec->txgi_max)
 				tic->by_rate -= rs_target;
@@ -6288,7 +6275,6 @@ u8 hal_com_get_txpwr_idx(_adapter *adapter, enum rf_path rfpath
 		mcs7_idx = phy_get_tssi_txpwr_by_rate_ref(adapter, rfpath, bw, cch, opch);
 		base = halrf_get_tssi_codeword_for_txindex(adapter_to_phydm(adapter)) - mcs7_idx;
 		power_idx = base + rate_target + rate_amends;
-		power_idx = get_overridden_tx_power_index(power_idx);
 #else
 		base = 0;
 		power_idx = rate_target + rate_amends;

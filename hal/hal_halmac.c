@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2015 - 2022 Realtek Corporation.
+ * Copyright(c) 2015 - 2024 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -6074,3 +6074,29 @@ int rtw_halmac_set_gpio(struct dvobj_priv *d, u8 gpio_id, u8 gpio_enable, u8 gpi
 }
 #endif
 #endif
+
+#ifdef CONFIG_HALMAC_RS
+/* RS HALMAC doesn't support halmac_cmd() yet. */
+int rtw_halmac_cmd(struct dvobj_priv *d, char *input, u32 in_len,
+		   char *output, u32 out_len)
+{
+	snprintf(output, out_len, "HALMAC_RET_NOT_SUPPORT: \"%s\"", input);
+	return -1;
+}
+#else /* !CONFIG_HALMAC_RS */
+int rtw_halmac_cmd(struct dvobj_priv *d, char *input, u32 in_len,
+		   char *output, u32 out_len)
+{
+	struct halmac_adapter *halmac;
+	enum halmac_ret_status status;
+
+
+	halmac = dvobj_to_halmac(d);
+	status = halmac_cmd(halmac, input, in_len, 1, output, out_len);
+	if (status != HALMAC_RET_SUCCESS) {
+		return -1;
+	}
+
+	return 0;
+}
+#endif /* !CONFIG_HALMAC_RS */

@@ -103,7 +103,6 @@ sint _rtw_init_recv_priv(struct recv_priv *precvpriv, _adapter *padapter)
 #else
 	precvpriv->store_law_data_flag = 0;
 #endif
-	_rtw_memset(precvpriv->ofdm_snr_latest, 0, sizeof(precvpriv->ofdm_snr_latest));
 
 	rtw_os_recv_resource_init(precvpriv, padapter);
 
@@ -151,8 +150,6 @@ sint _rtw_init_recv_priv(struct recv_priv *precvpriv, _adapter *padapter)
 
 	precvpriv->signal_stat_sampling_interval = 2000; /* ms */
 	/* precvpriv->signal_stat_converging_constant = 5000; */ /* ms */
-
-	rtw_set_signal_stat_timer(precvpriv);
 #endif /* CONFIG_NEW_SIGNAL_STAT_PROCESS */
 
 	_rtw_memset(&precvpriv->ip_statistic, 0,
@@ -3904,11 +3901,9 @@ int validate_mp_recv_frame(_adapter *adapter, union recv_frame *precv_frame)
 			int i;
 			RTW_INFO("############ type:0x%02x subtype:0x%02x #################\n", type, subtype);
 
-			for (i = 0; i < precv_frame->u.hdr.len; i = i + 8) {
+			for (i = 0; i < precv_frame->u.hdr.len; i = i + 8)
 				RTW_INFO("%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:\n", *(ptr + i),
-					*(ptr + i + 1), *(ptr + i + 2) , *(ptr + i + 3) , *(ptr + i + 4), *(ptr + i + 5),
-					*(ptr + i + 6), *(ptr + i + 7));
-			}
+					*(ptr + i + 1), *(ptr + i + 2) , *(ptr + i + 3) , *(ptr + i + 4), *(ptr + i + 5), *(ptr + i + 6), *(ptr + i + 7));
 			RTW_INFO("#############################\n");
 			_rtw_memset(pmppriv->mplink_buf, '\0' , sizeof(pmppriv->mplink_buf));
 			_rtw_memcpy(pmppriv->mplink_buf, ptr, precv_frame->u.hdr.len);
@@ -4127,8 +4122,6 @@ exit:
 #endif
 
 
-void rx_process_phy_info(_adapter *padapter, union recv_frame *rframe);
-
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 24))
 int recv_frame_monitor(_adapter *padapter, union recv_frame *rframe)
 {
@@ -4147,24 +4140,6 @@ int recv_frame_monitor(_adapter *padapter, union recv_frame *rframe)
 	pskb->len = rframe->u.hdr.len;
 	pskb->data = rframe->u.hdr.rx_data;
 	skb_set_tail_pointer(pskb, rframe->u.hdr.len);
-
-	/* blink LED on monitor RX before radiotap header is added */
-	if (rframe->u.hdr.rx_data && rframe->u.hdr.len >= 10)
-		rtw_led_rx_control(padapter, GetAddr1Ptr(rframe->u.hdr.rx_data));
-
-	/* Update signal stats/SNR for monitor mode */
-	if (rframe->u.hdr.attrib.physt) {
-		struct dm_struct *dm = adapter_to_phydm(padapter);
-
-		if (rframe->u.hdr.attrib.phy_info.physts_rpt_valid == _TRUE)
-			rx_process_phy_info(padapter, rframe);
-
-		/* Keep proc rssi_a/rssi_b and snr_a/snr_b fresh in monitor mode */
-		dm->rssi_a = rframe->u.hdr.attrib.phy_info.rx_mimo_signal_strength[RF_PATH_A];
-		dm->rssi_b = rframe->u.hdr.attrib.phy_info.rx_mimo_signal_strength[RF_PATH_B];
-		padapter->recvpriv.ofdm_snr_latest[RF_PATH_A] = rframe->u.hdr.attrib.phy_info.rx_snr[RF_PATH_A];
-		padapter->recvpriv.ofdm_snr_latest[RF_PATH_B] = rframe->u.hdr.attrib.phy_info.rx_snr[RF_PATH_B];
-	}
 
 	if (ndev->type == ARPHRD_IEEE80211_RADIOTAP) {
 		/* fill radiotap header */

@@ -3187,9 +3187,9 @@ static int rtw_wx_get_nick(struct net_device *dev,
 	/* struct security_priv *psecuritypriv = &padapter->securitypriv; */
 
 	if (extra) {
-		wrqu->data.length = 16;
+		wrqu->data.length = 14;
 		wrqu->data.flags = 1;
-		_rtw_memcpy(extra, "rtl88x2eu_ohd", 16);
+		_rtw_memcpy(extra, "<WIFI@REALTEK>", 14);
 	}
 
 	/* rtw_signal_process(pid, SIGUSR1); */ /* for test */
@@ -13002,7 +13002,7 @@ static int _rtw_ioctl_wext_private(struct net_device *dev, union iwreq_data *wrq
 		case IW_PRIV_TYPE_CHAR:
 			/* Display args */
 			for (j = 0; j < n; j++) {
-				sprintf(str, "%c  ", extra[j]);
+				sprintf(str,"%c", extra[j]);
 				len = strlen(str);
 				output_len = strlen(output);
 				if ((output_len + len + 1) > 4096) {

@@ -644,6 +644,29 @@ void _iqk_preset_8822e(
 	odm_set_rf_reg(dm, RF_PATH_A, 0xb1, 0x04000, 0x0);
 #endif
 }
+
+void _iqk_tx_pause_8822e(
+	struct dm_struct *dm)
+{
+	u8 reg_rf0_a, reg_rf0_b;
+	u16 count = 0;
+
+	odm_write_1byte(dm, R_0x522, 0xff);
+	odm_set_bb_reg(dm, R_0x1e70, 0x0000000f, 0x2); /*hw tx stop*/
+
+	reg_rf0_a = (u8)odm_get_rf_reg(dm, RF_PATH_A, RF_0x00, 0xF0000);
+	reg_rf0_b = (u8)odm_get_rf_reg(dm, RF_PATH_B, RF_0x00, 0xF0000);
+
+	while (((reg_rf0_a != 3) && (reg_rf0_b != 3)) && count < 2500) {
+		reg_rf0_a = (u8)odm_get_rf_reg(dm, RF_PATH_A, RF_0x00, 0xF0000);
+		reg_rf0_b = (u8)odm_get_rf_reg(dm, RF_PATH_B, RF_0x00, 0xF0000);
+		ODM_delay_us(2);
+		count++;
+	}
+
+	RF_DBG(dm, DBG_RF_DPK, "[DPK] Tx pause!!\n");
+}
+
 __odm_func_aon__
 void _iqk_macbb_setting_8822e(
 	struct dm_struct *dm)
@@ -655,11 +678,16 @@ void _iqk_macbb_setting_8822e(
 #else
 	//phydm_config_rx_path_8822e(dm, 0x3); // for pathA/B
 #endif
+#if 0
 	//odm_write_1byte(dm, R_0x522, 0xff);
 	odm_set_mac_reg(dm, 0x520, 0x00ff0000, 0xff);	
 
 	odm_set_bb_reg(dm, R_0x1e70, 0x0000000f, 0x2); /*hw tx stop*/
 	ODM_delay_us(10);
+#else
+	_iqk_tx_pause_8822e(dm);
+#endif
+
 	//0x73[2] = 1 (PTA control path is at WLAN)
 	odm_set_bb_reg(dm, 0x70, 0xff000000, 0x06);	
 	//02_8822E_BB_for_IQK
@@ -976,7 +1004,7 @@ boolean _iqk_5g_txk_iqk_8822e(struct dm_struct *dm, u8 path)
 	iqk_info->iqk_fail_report[0][path][0] = kfail;
 
 	if(kfail) {
-		_iqk_txxym_dump_8822e(dm, path);
+		//_iqk_txxym_dump_8822e(dm, path);
 		iqk_info->fail_step |= BIT(1);
 		odm_set_bb_reg(dm, 0x1b00, 0x00000006, path);
 		odm_set_bb_reg(dm, 0x1b38, MASKDWORD, 0x40000000);
@@ -1070,7 +1098,7 @@ boolean _iqk_2g_txk_iqk_8822e(struct dm_struct *dm, u8 path)
 
 	if(kfail) {
 		odm_set_bb_reg(dm, 0x1b38, MASKDWORD, 0x40000000);
-		_iqk_txxym_dump_8822e(dm, path);		
+		//_iqk_txxym_dump_8822e(dm, path);
 		iqk_info->fail_step |= BIT(1);		
 		odm_set_bb_reg(dm, 0x1b70, BIT(8), 0x0);
 		RF_DBG(dm, DBG_RF_IQK, "[IQK] 2G TXK Fail \n");
@@ -1349,6 +1377,11 @@ boolean _iqk_2g_rx_gain_search1_8822e(struct dm_struct *dm, u8 path, boolean for
 __odm_func_aon__
 void _iqk_5g_rxk_iqk_8822e(struct dm_struct *dm, u8 path)
 {
+#ifdef HALRF_DZ_LOG	
+		struct _hal_rf_ *rf = &(dm->rf_table);	
+		struct halrf_rfk_dz_rpt *rfk_dz = &(rf->rfk_dz_rpt);
+#endif
+
 	struct dm_iqk_info *iqk_info = &dm->IQK_info;
 	boolean kfail = false;
 	
@@ -1358,7 +1391,7 @@ void _iqk_5g_rxk_iqk_8822e(struct dm_struct *dm, u8 path)
 	kfail = _iqk_5g_rx_gain_search1_8822e(dm, path, false);
 
 	if(kfail) {
-		_iqk_sram_dump_8822e(dm, path);
+		//_iqk_sram_dump_8822e(dm, path);
 		iqk_info->fail_step |= BIT(2);		
 		RF_DBG(dm, DBG_RF_IQK, "[IQK]S%x, 5G RXK1 Fail \n", path);
 	} else {
@@ -1384,11 +1417,14 @@ void _iqk_5g_rxk_iqk_8822e(struct dm_struct *dm, u8 path)
 	iqk_info->iqk_fail_report[0][path][1] = kfail;
 
 	if(kfail) {		
-		_iqk_txxym_dump_8822e(dm, path); //trx share for dbg
 		odm_set_bb_reg(dm, 0x1b3c, MASKDWORD, 0x40000000);
 		iqk_info->fail_step |= BIT(3);
 		odm_set_bb_reg(dm, 0x1b70, BIT(0), 0x0);
 		RF_DBG(dm, DBG_RF_IQK, "[IQK]S%x, 5G RXK Fail \n", path);
+#ifdef HALRF_DZ_LOG
+		rfk_dz->iqk_dz_code |= BIT(1 * path);
+#endif
+
 	}
 
 }
@@ -1396,6 +1432,10 @@ void _iqk_5g_rxk_iqk_8822e(struct dm_struct *dm, u8 path)
 __odm_func_aon__
 void _iqk_2g_rxk_iqk_8822e(struct dm_struct *dm, u8 path)
 {
+#ifdef  HALRF_DZ_LOG	
+		struct _hal_rf_ *rf = &(dm->rf_table);	
+		struct halrf_rfk_dz_rpt *rfk_dz = &(rf->rfk_dz_rpt);
+#endif
 	struct dm_iqk_info *iqk_info = &dm->IQK_info;
 	boolean kfail = false;
 	
@@ -1405,7 +1445,7 @@ void _iqk_2g_rxk_iqk_8822e(struct dm_struct *dm, u8 path)
 	kfail = _iqk_2g_rx_gain_search1_8822e(dm, path, false);
 	
 	if(kfail) {	
-		_iqk_sram_dump_8822e(dm, path);	
+		//_iqk_sram_dump_8822e(dm, path);
 		odm_set_bb_reg(dm, 0x1b24, 0x000fffff, 0x70108); //LNA=0, RXBB = 0x8
 		iqk_info->fail_step |= BIT(2);		
 		RF_DBG(dm, DBG_RF_IQK, "[IQK]S%x,2G RXK1 Fail \n", path);
@@ -1438,6 +1478,9 @@ void _iqk_2g_rxk_iqk_8822e(struct dm_struct *dm, u8 path)
 		iqk_info->fail_step |= BIT(3);
 		odm_set_bb_reg(dm, 0x1b70, BIT(0), 0x0);
 		RF_DBG(dm, DBG_RF_IQK, "[IQK]S%x, 2G RXK Fail \n", path);
+#ifdef HALRF_DZ_LOG
+		rfk_dz->iqk_dz_code |= BIT(1 * path);
+#endif
 	}
 
 }
@@ -1447,6 +1490,11 @@ void _iqk_iqk_by_path_8822e(
 	struct dm_struct *dm,
 	boolean segment_iqk)
 {
+#ifdef  HALRF_DZ_LOG	
+		struct _hal_rf_ *rf = &(dm->rf_table);	
+		struct halrf_rfk_dz_rpt *rfk_dz = &(rf->rfk_dz_rpt);
+#endif
+
 	struct dm_iqk_info *iqk_info = &dm->IQK_info;
 	u8 path = 0x0;	
 	boolean txkfail = false;
@@ -1465,9 +1513,9 @@ void _iqk_iqk_by_path_8822e(
 */
 	for(path = 0x0; path < SS_8822E; path++) {
 		if(path == RF_PATH_A){		
-			odm_set_rf_reg(dm, path, RF_PATH_B, 0xf0000, 0x1);	
+			odm_set_rf_reg(dm, RF_PATH_B, 0x0, 0xf0000, 0x1);
 		} else {		
-			odm_set_rf_reg(dm, path, RF_PATH_A, 0xf0000, 0x1);	
+			odm_set_rf_reg(dm, RF_PATH_A, 0x0, 0xf0000, 0x1);
 		}
 
 
@@ -1477,7 +1525,7 @@ void _iqk_iqk_by_path_8822e(
 			txkfail = _iqk_2g_txk_iqk_8822e(dm, path);
 			if(!txkfail) {
 				//halrf_dack_reset_8822e(dm);
-			_iqk_2g_rxk_iqk_8822e(dm, path);
+				_iqk_2g_rxk_iqk_8822e(dm, path);
 			}
 		} else {		
 			iqk_info->is_nbiqk = false;
@@ -1486,8 +1534,15 @@ void _iqk_iqk_by_path_8822e(
 			if(!txkfail) {
 				//halrf_dack_reset_8822e(dm);
 			_iqk_5g_rxk_iqk_8822e(dm, path);
+			}
 		}
-	}
+
+		if(txkfail) {
+#ifdef  HALRF_DZ_LOG
+			rfk_dz->iqk_dz_code |= BIT(0 * path);
+#endif
+		}
+
 	}
 #if 1
 	for(path = 0x0; path < SS_8822E; path++) {

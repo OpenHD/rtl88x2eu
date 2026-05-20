@@ -410,11 +410,6 @@ int proc_get_huawei_trx_info(struct seq_file *m, void *v);
 
 int proc_get_rx_signal(struct seq_file *m, void *v);
 ssize_t proc_set_rx_signal(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
-int proc_get_rssi_a(struct seq_file *m, void *v);
-int proc_get_rssi_b(struct seq_file *m, void *v);
-int proc_get_snr_a(struct seq_file *m, void *v);
-int proc_get_snr_b(struct seq_file *m, void *v);
-int proc_get_pubq_free_page(struct seq_file *m, void *v);
 int proc_get_hw_status(struct seq_file *m, void *v);
 ssize_t proc_set_hw_status(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
 int proc_get_mac_rptbuf(struct seq_file *m, void *v);
@@ -545,6 +540,27 @@ int proc_get_wakeup_reason(struct seq_file *m, void *v);
 #ifdef CONFIG_WOW_KEEP_ALIVE_PATTERN
 int proc_dump_wow_keep_alive_info(struct seq_file *m, void *v);
 #endif /*CONFIG_WOW_KEEP_ALIVE_PATTERN*/
+#ifdef CONFIG_MDNS_OFFLOAD
+ssize_t proc_set_wow_mdns_resp(struct file *file, const char __user *buffer,
+			       size_t count, loff_t *pos, void *data);
+int proc_get_wow_mdns_resp(struct seq_file *m, void *v);
+ssize_t proc_set_wow_mdns_match_criteria(struct file *file,
+					 const char __user *buffer,
+					 size_t count, loff_t *pos, void *data);
+int proc_get_wow_mdns_match_criteria(struct seq_file *m, void *v);
+ssize_t proc_set_wow_mdns_passthru_list(struct file *file,
+					const char __user *buffer,
+					size_t count, loff_t *pos, void *data);
+int proc_get_wow_mdns_passthru_list(struct seq_file *m, void *v);
+ssize_t proc_set_wow_mdns_offload_state(struct file *file,
+					const char __user *buffer,
+					size_t count, loff_t *pos, void *data);
+int proc_get_wow_mdns_offload_state(struct seq_file *m, void *v);
+ssize_t proc_set_wow_mdns_passthru_behavior(struct file *file,
+					    const char __user *buffer,
+					    size_t count, loff_t *pos, void *data);
+int proc_get_wow_mdns_passthru_behavior(struct seq_file *m, void *v);
+#endif /* CONFIG_MDNS_OFFLOAD */
 #endif
 
 #ifdef CONFIG_WAR_OFFLOAD

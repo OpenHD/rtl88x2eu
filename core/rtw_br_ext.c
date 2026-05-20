@@ -105,11 +105,9 @@ static __inline__ unsigned char *__nat25_find_pppoe_tag(struct pppoe_hdr *ph, un
 static __inline__ int __nat25_add_pppoe_tag(struct sk_buff *skb, struct pppoe_tag *tag)
 {
 	struct pppoe_hdr *ph = (struct pppoe_hdr *)(skb->data + ETH_HLEN);
-	unsigned short tag_len;
 	int data_len;
 
-	tag_len = ntohs(tag->tag_len);
-	data_len = tag_len + TAG_HDR_LEN;
+	data_len = tag->tag_len + TAG_HDR_LEN;
 	if (skb_tailroom(skb) < data_len) {
 		_DEBUG_ERR("skb_tailroom() failed in add SID tag!\n");
 		return -1;
@@ -119,8 +117,7 @@ static __inline__ int __nat25_add_pppoe_tag(struct sk_buff *skb, struct pppoe_ta
 	/* have a room for new tag */
 	memmove(((unsigned char *)ph->tag + data_len), (unsigned char *)ph->tag, ntohs(ph->length));
 	ph->length = htons(ntohs(ph->length) + data_len);
-	memcpy((unsigned char *)ph->tag, tag, TAG_HDR_LEN);
-	memcpy((unsigned char *)ph->tag + TAG_HDR_LEN, tag->tag_data, tag_len);
+	memcpy((unsigned char *)ph->tag, tag, data_len);
 	return data_len;
 }
 

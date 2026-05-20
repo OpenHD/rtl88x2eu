@@ -54,7 +54,10 @@ d2all := y
 endif
 
 halmac-y +=		$(path_hm)/halmac_api.o
-halmac-y +=		$(path_hm)/halmac_dbg.o
+halmac-y +=		$(path_hm)/halmac_dbg.o \
+			$(path_hm)/halmac_dbg_cmd.o
+# self-diagnosis feature
+halmac-y +=		$(path_hm)/diagnosis_ac.o
 
 # Level 1 directory
 path_hm_d1 := $(path_hm)/halmac_$(series)

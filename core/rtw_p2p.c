@@ -3255,6 +3255,13 @@ static bool rtw_chk_p2pie_ch_list_with_buddy(_adapter *padapter, const u8 *frame
 	u32 ies_len, p2p_ielen;
 	u8 union_ch = rtw_mi_get_union_chan(padapter);
 
+#ifdef CONFIG_MCC_MODE
+	if (MCC_EN(padapter)) {
+		fit = _TRUE;
+		return fit;
+	}
+#endif /* CONFIG_MCC_MODE */
+
 	ies = (u8 *)(frame_body + _PUBLIC_ACTION_IE_OFFSET_);
 	ies_len = len - _PUBLIC_ACTION_IE_OFFSET_;
 
@@ -3560,20 +3567,29 @@ u8 *dump_p2p_attr_ch_list(u8 *p2p_ie, uint p2p_ielen, u8 *buf, u32 buf_len)
 	u8 *pattr = NULL;
 	int w_sz = 0;
 	u8 ch_cnt = 0;
-	u8 ch_list[40];
+	u8 ch_list[MAX_CHANNEL_NUM];
 
 	pattr = rtw_get_p2p_attr_content(p2p_ie, p2p_ielen, P2P_ATTR_CH_LIST, NULL, &attr_contentlen);
 	if (pattr != NULL) {
 		int i, j;
 		u32 num_of_ch;
+		u8 op_class;
 		u8 *pattr_temp = pattr + 3 ;
 
 		attr_contentlen -= 3;
 
-		_rtw_memset(ch_list, 0, 40);
+		_rtw_memset(ch_list, 0, MAX_CHANNEL_NUM);
 
 		while (attr_contentlen > 0) {
+			op_class = *pattr_temp;
 			num_of_ch = *(pattr_temp + 1);
+
+			/* skip 6GHz channels in P2P attribute when 6GHz band is not supported */
+			if (!CONFIG_IEEE80211_BAND_6GHZ && (op_class >= 131)) {
+				pattr_temp += (2 + num_of_ch);
+				attr_contentlen -= (2 + num_of_ch);
+				continue;
+			}
 
 			for (i = 0; i < num_of_ch; i++) {
 				for (j = 0; j < ch_cnt; j++) {
@@ -3582,13 +3598,17 @@ u8 *dump_p2p_attr_ch_list(u8 *p2p_ie, uint p2p_ielen, u8 *buf, u32 buf_len)
 				}
 				if (j >= ch_cnt)
 					ch_list[ch_cnt++] = *(pattr_temp + 2 + i);
-
+				if (ch_cnt == MAX_CHANNEL_NUM) {
+					RTW_INFO("channel list array is used up, may need to increase array size\n");
+					goto make_str;
+				}
 			}
 
 			pattr_temp += (2 + num_of_ch);
 			attr_contentlen -= (2 + num_of_ch);
 		}
 
+make_str:
 		for (j = 0; j < ch_cnt; j++) {
 			if (j == 0)
 				w_sz += snprintf(buf + w_sz, buf_len - w_sz, "%u", ch_list[j]);
@@ -4242,6 +4262,8 @@ void p2p_ps_wk_hdl(_adapter *padapter, u8 p2p_ps_state)
 			return;
 		}
 		if (pwdinfo->p2p_ps_mode > P2P_PS_NONE) {
+/*	do not need thise warning message due to FW already handle this case*/
+#if 0
 #ifdef CONFIG_MCC_MODE
 			if (MCC_EN(padapter)) {
 				if (rtw_hal_check_mcc_status(padapter, MCC_STATUS_DOING_MCC)) {
@@ -4251,6 +4273,7 @@ void p2p_ps_wk_hdl(_adapter *padapter, u8 p2p_ps_state)
 
 			}
 #endif /* CONFIG_MCC_MODE */
+#endif
 			pwdinfo->p2p_ps_state = p2p_ps_state;
 
 #ifdef CONFIG_LPS

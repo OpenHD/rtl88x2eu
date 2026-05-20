@@ -269,7 +269,7 @@ s32 phydm_cnvrt_2_sign(u32 val, u8 bit_num)
 	if (bit_num >= 32)
 		return (s32)val;
 
-	if (val & BIT(bit_num - 1)) /*Sign BIT*/
+	if (bit_num > 0 && (val & BIT(bit_num - 1))) /*Sign BIT*/
 		val -= (1 << bit_num); /*@2's*/
 
 	return val;
@@ -283,7 +283,7 @@ s64 phydm_cnvrt_2_sign_64(u64 val, u8 bit_num)
 	if (bit_num >= 64)
 		return (s64)val;
 
-	if (val & (one << (bit_num - 1))) /*Sign BIT*/
+	if (bit_num > 0 && (val & (one << (bit_num - 1)))) /*Sign BIT*/
 		val_sign = val - (one << bit_num); /*@2's*/
 
 	return val_sign;

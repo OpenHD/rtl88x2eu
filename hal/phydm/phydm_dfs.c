@@ -453,7 +453,7 @@ void phydm_radar_detect_enable(void *dm_void)
 			}
 			odm_set_bb_reg(dm, R_0xa44, MASKDWORD, 0x3030bea0);
 			odm_set_bb_reg(dm, R_0xa48, MASKDWORD, 0x2a521254);
-			odm_set_bb_reg(dm, R_0xa4c, MASKDWORD, 0x42533345);
+			odm_set_bb_reg(dm, R_0xa4c, MASKDWORD, 0x42733345);
 			odm_set_bb_reg(dm, R_0xa50, MASKDWORD, 0x605be0c3);
 			odm_set_bb_reg(dm, R_0xa54, MASKDWORD, 0x500009e8);
 			odm_set_bb_reg(dm, R_0x180c, 0xe0000, 0x0);
@@ -1056,7 +1056,7 @@ phydm_radar_detect_dm_check(
 				  radar_rpt_reg_value, short_pulse_cnt_inc,
 				  long_pulse_cnt_inc);
 		#if (RTL8812F_SUPPORT || RTL8822C_SUPPORT || RTL8814B_SUPPORT ||\
-			RTL8822E_SUPPORT)
+			RTL8822E_SUPPORT || RTL8723F_SUPPORT)
 			rega40_value = odm_get_bb_reg(dm, R_0xa40, MASKDWORD);
 			rega44_value = odm_get_bb_reg(dm, R_0xa44, MASKDWORD);
 			rega48_value = odm_get_bb_reg(dm, R_0xa48, MASKDWORD);

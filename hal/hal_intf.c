@@ -419,6 +419,14 @@ if (IS_HARDWARE_TYPE_8814A(adapter)) {
 	if (hal_data->eeprom_max_tx_cnt)
 		hal_data->max_tx_cnt = rtw_min(hal_data->max_tx_cnt, hal_data->eeprom_max_tx_cnt);
 
+	if ((IS_HARDWARE_TYPE_8822C(adapter) || IS_HARDWARE_TYPE_8822E(adapter))
+		&& (regsty->rx_path_lmt == 1)) {
+		trx_path_bmp = hal_spec->rf_reg_trx_path_bmp;
+		trx_path_bmp = rtw_restrict_trx_path_bmp_by_trx_num_lmt(trx_path_bmp
+			, regsty->tx_path_lmt, 2, &tx_path_num, &rx_path_num);
+		hal_data->trx_path_bmp = trx_path_bmp;
+	}
+
 	if (1)
 		_dump_rf_path(RTW_DBGDUMP, adapter);
 }

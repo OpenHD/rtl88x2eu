@@ -25,6 +25,7 @@
 
 #define REAUTH_TO		(300) /* (50) */
 #define REASSOC_TO		(300) /* (50) */
+#define SAE_AUTH_TIMEOUT	(2400)
 /* #define DISCONNECT_TO	(3000) */
 #define ADDBA_TO			(2000)
 
@@ -340,11 +341,6 @@ struct mlme_ext_info {
 #ifdef CONFIG_WRITE_BCN_LEN_TO_FW
 	u16 last_bcn_len;
 #endif
-
-	u8	slottime_override_en;
-	u8	slottime_override;
-	u8	sifs_override_en;
-	u8	sifs_override;
 };
 
 int rtw_rfctl_init(_adapter *adapter);
@@ -590,6 +586,14 @@ void sitesurvey_set_offch_state(_adapter *adapter, u8 scan_state);
 #define mlmeext_assign_scan_backop_flags_mesh(mlmeext, flags) do {} while (0)
 #endif /* defined(CONFIG_SCAN_BACKOP) && defined(CONFIG_RTW_MESH) */
 
+#ifdef CONFIG_WOWLAN
+#define IS_WOW_CANT_TX(pwrpriv, pmgntframe) (pwrpriv->bInSuspend && \
+		pmgntframe->attrib.qsel != QSLT_BEACON && \
+		pmgntframe->attrib.qsel != QSLT_CMD)
+#else
+#define IS_WOW_CANT_TX(pwrpriv, pmgntframe) _FALSE
+#endif
+
 u32 rtw_scan_timeout_decision(_adapter *padapter);
 
 void init_mlme_default_rate_set(_adapter *padapter);
@@ -714,7 +718,8 @@ int rtw_get_bcn_keys(_adapter *adapter, u8 *whdr, u32 flen, struct beacon_keys *
 int rtw_get_bcn_keys_from_bss(WLAN_BSSID_EX *bss, struct beacon_keys *bcn_keys);
 int rtw_update_bcn_keys_of_network(struct wlan_network *network);
 
-int validate_beacon_len(u8 *pframe, uint len);
+int check_ielen(u8 *start, uint len);
+int validate_bcn_and_probe_rsp_len(u8 *pframe, uint len);
 void rtw_dump_bcn_keys(void *sel, struct beacon_keys *recv_beacon);
 void rtw_bcn_key_err_fix(struct beacon_keys *cur, struct beacon_keys *recv);
 bool rtw_bcn_key_compare(struct beacon_keys *cur, struct beacon_keys *recv);
@@ -835,7 +840,7 @@ void update_mgntframe_subtype(_adapter *padapter, struct xmit_frame *pmgntframe)
 #endif
 void update_mgntframe_attrib(_adapter *padapter, struct pkt_attrib *pattrib);
 void update_mgntframe_attrib_addr(_adapter *padapter, struct xmit_frame *pmgntframe);
-s32 dump_mgntframe(_adapter *padapter, struct xmit_frame *pmgntframe);
+void dump_mgntframe(_adapter *padapter, struct xmit_frame *pmgntframe);
 s32 dump_mgntframe_and_wait(_adapter *padapter, struct xmit_frame *pmgntframe, int timeout_ms);
 s32 dump_mgntframe_and_wait_ack(_adapter *padapter, struct xmit_frame *pmgntframe);
 s32 dump_mgntframe_and_wait_ack_timeout(_adapter *padapter, struct xmit_frame *pmgntframe, int timeout_ms);

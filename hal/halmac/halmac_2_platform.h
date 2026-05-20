@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2015 - 2018 Realtek Corporation. All rights reserved.
+ * Copyright(c) 2015 - 2024 Realtek Corporation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -78,6 +78,20 @@
 #else
 #define HALMAC_DBG_MONITOR_IO		0
 #endif /*DBG_IO*/
+
+#ifdef CONFIG_SELF_DIAG_INFO
+#define HALMAC_FEATURE_DBGPKG		1
+#else
+/* debug define */
+#define HALMAC_FEATURE_DBGPKG		0
+#endif
+
+#ifdef CONFIG_SELF_DIAG_INFO
+#define HALMAC_SELF_DIAG		1
+#else
+/* self diag define */
+#define HALMAC_SELF_DIAG		0
+#endif
 
 /*[Driver] define the Rx FIFO expanding mode packet size unit for 8821C and 8822B */
 /*Should be 8 Byte alignment*/

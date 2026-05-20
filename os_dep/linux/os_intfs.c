@@ -17,20 +17,13 @@
 #include <drv_types.h>
 #include <hal_data.h>
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0))
-#define strlcpy strscpy
-#endif
-
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Realtek Wireless Lan Driver");
 MODULE_AUTHOR("Realtek Semiconductor Corp.");
 MODULE_VERSION(DRIVERVERSION);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
-MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
-#else
-MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
-#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+#define strlcpy(p, q, s) strscpy(p, q, s)
 #endif
 
 /* module param defaults */
@@ -259,11 +252,6 @@ MODULE_PARM_DESC(rtw_tx_aclt_conf_mesh, "device TX AC queue lifetime config for 
 uint rtw_tx_bw_mode = 0x21;
 module_param(rtw_tx_bw_mode, uint, 0644);
 MODULE_PARM_DESC(rtw_tx_bw_mode, "The max tx bw for 2.4G and 5G. format is the same as rtw_bw_mode");
-
-/* Default-enable 40MHz monitor/injection workaround (TX 80MHz / RX 40MHz) */
-int rtw_force_tx_rf_bw_80_for_bw40 = 1;
-module_param(rtw_force_tx_rf_bw_80_for_bw40, int, 0644);
-MODULE_PARM_DESC(rtw_force_tx_rf_bw_80_for_bw40, "Force TX RF BW to 80MHz when configured BW is 40MHz (8822E monitor/injection workaround)");
 
 #ifdef CONFIG_FW_HANDLE_TXBCN
 uint rtw_tbtt_rpt = 0;	/*ROOT AP - BIT0, VAP1 - BIT1, VAP2 - BIT2, VAP3 - VAP3, FW report TBTT INT by C2H*/
@@ -818,10 +806,6 @@ uint rtw_pll_ref_clk_sel = CONFIG_RTW_PLL_REF_CLK_SEL;
 module_param(rtw_pll_ref_clk_sel, uint, 0644);
 MODULE_PARM_DESC(rtw_pll_ref_clk_sel, "force pll_ref_clk_sel, 0xF:use autoload value");
 
-int rtw_tx_pwr_idx_override = 0;
-module_param(rtw_tx_pwr_idx_override, int, 0644);
-MODULE_PARM_DESC(rtw_tx_pwr_idx_override, "0-63 int value to force-set all power index values to");
-
 int rtw_tx_pwr_by_rate = CONFIG_TXPWR_BY_RATE_EN;
 module_param(rtw_tx_pwr_by_rate, int, 0644);
 MODULE_PARM_DESC(rtw_tx_pwr_by_rate, "0:Disable, 1:Enable, 2: Depend on efuse");
@@ -880,7 +864,7 @@ MODULE_PARM_DESC(rtw_antenna_gain, "Antenna gain in mBi. 0x7FFF: unspecifed");
 
 #ifdef CONFIG_RTW_TX_NPATH_EN
 /*0:disable ,1: 2path*/
-int rtw_tx_npath_enable = 0;
+int rtw_tx_npath_enable = 1;
 module_param(rtw_tx_npath_enable, int, 0644);
 MODULE_PARM_DESC(rtw_tx_npath_enable, "0:Disable, 1:TX-2PATH");
 #endif
@@ -1152,16 +1136,6 @@ static void rtw_regsty_load_tx_ac_lifetime(struct registry_priv *regsty)
 	}
 }
 #endif
-// OpenHD params
-int openhd_override_channel = 0;
-module_param(openhd_override_channel, int, 0644);
-MODULE_PARM_DESC(openhd_override_channel, "OpenHD easy (CRDA workaround)");
-int openhd_override_channel_width = 0;
-module_param(openhd_override_channel_width, int, 0644);
-MODULE_PARM_DESC(openhd_override_channel_width, "OpenHD easy (CRDA workaround)");
-int openhd_override_tx_power_mbm = 0;
-module_param(openhd_override_tx_power_mbm, int, 0644);
-MODULE_PARM_DESC(openhd_override_tx_power_mbm, "OpenHD easy (CRDA workaround)");
 
 void rtw_regsty_load_target_tx_power(struct registry_priv *regsty)
 {
@@ -1424,7 +1398,6 @@ uint loadparam(_adapter *padapter)
 #endif
 
 	registry_par->tx_bw_mode = (u8)rtw_tx_bw_mode;
-	registry_par->force_tx_rf_bw_80_for_bw40 = (u8)rtw_force_tx_rf_bw_80_for_bw40;
 
 #ifdef CONFIG_80211N_HT
 	registry_par->ht_enable = (u8)rtw_ht_enable;
@@ -2075,12 +2048,7 @@ struct net_device *rtw_init_netdev(_adapter *old_padapter)
 
 	if (!pnetdev)
 		return NULL;
-		
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0))
-	pnetdev->min_mtu = WLAN_MIN_ETHFRM_LEN;
-	pnetdev->mtu = WLAN_DATA_MAXLEN;
-	pnetdev->max_mtu = WLAN_DATA_MAXLEN;
-#endif
+
 	padapter = rtw_netdev_priv(pnetdev);
 	padapter->pnetdev = pnetdev;
 
@@ -2295,7 +2263,7 @@ int rtw_os_ndev_register(_adapter *adapter, const char *name)
 
 #ifdef CONFIG_RTW_NAPI
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
-	netif_napi_add_weight(ndev, &adapter->napi, rtw_recv_napi_poll, RTL_NAPI_WEIGHT);
+	netif_napi_add(ndev, &adapter->napi, rtw_recv_napi_poll);
 #else
 	netif_napi_add(ndev, &adapter->napi, rtw_recv_napi_poll, RTL_NAPI_WEIGHT);
 #endif
@@ -2982,7 +2950,8 @@ u8 rtw_reset_drv_sw(_adapter *padapter)
 	mlmeext_set_scan_state(&padapter->mlmeextpriv, SCAN_DISABLE);
 
 #ifdef CONFIG_NEW_SIGNAL_STAT_PROCESS
-	rtw_set_signal_stat_timer(&padapter->recvpriv);
+	if (padapter->netif_up == _TRUE)
+		rtw_set_signal_stat_timer(&padapter->recvpriv);
 #endif
 
 	return ret8;
@@ -4132,6 +4101,10 @@ int _netdev_open(struct net_device *pnetdev)
 		pwrctrlpriv->bips_processing = _FALSE;
 	}
 
+#ifdef CONFIG_NEW_SIGNAL_STAT_PROCESS
+	rtw_set_signal_stat_timer(&padapter->recvpriv);
+#endif
+
 	RTW_INFO(FUNC_NDEV_FMT" Success (bup=%d)\n", FUNC_NDEV_ARG(pnetdev), padapter->bup);
 	return 0;
 
@@ -4273,6 +4246,10 @@ int _netdev_open(struct net_device *pnetdev)
 	pwrctrlpriv->tx_time = 0;
 	pwrctrlpriv->rx_time = 0;
 #endif /* CONFIG_RTW_CFGVEDNOR_LLSTATS */
+
+#ifdef CONFIG_NEW_SIGNAL_STAT_PROCESS
+	rtw_set_signal_stat_timer(&padapter->recvpriv);
+#endif
 
 	RTW_INFO("-871x_drv - drv_open, bup=%d\n", padapter->bup);
 
@@ -5077,7 +5054,7 @@ int rtw_suspend_free_assoc_resource(_adapter *padapter)
 	if (check_fwstate(pmlmepriv, WIFI_STATION_STATE) && check_fwstate(pmlmepriv, WIFI_ASOC_STATE)) {
 		rtw_disassoc_cmd(padapter, 0, RTW_CMDF_DIRECTLY);
 		/* s2-2.  indicate disconnect to os */
-		rtw_indicate_disconnect(padapter, 0, _FALSE);
+		rtw_indicate_disconnect(padapter, 3, _TRUE);
 	}
 #ifdef CONFIG_AP_MODE
 	else if (MLME_IS_AP(padapter) || MLME_IS_MESH(padapter))
@@ -5264,7 +5241,8 @@ int rtw_suspend_wow(_adapter *padapter)
 #ifdef CONFIG_LPS
 	else {
 		if(pwrpriv->wowlan_power_mgmt != PS_MODE_ACTIVE) {
-			rtw_set_ps_mode(padapter, pwrpriv->wowlan_power_mgmt, 0, 0, "WOWLAN");
+			RTW_INFO("%s smart_ps = %d\n", __func__, pwrpriv->smart_ps);
+			rtw_set_ps_mode(padapter, pwrpriv->wowlan_power_mgmt, pwrpriv->smart_ps, 0, "WOWLAN");
 		}
 	}
 #endif /* #ifdef CONFIG_LPS */
@@ -5591,6 +5569,9 @@ int rtw_resume_process_wow(_adapter *padapter)
 	poidparam.subcode = WOWLAN_DISABLE;
 	rtw_hal_set_hwreg(padapter, HW_VAR_WOWLAN, (u8 *)&poidparam);
 
+#ifdef CONFIG_NEW_SIGNAL_STAT_PROCESS
+	rtw_set_signal_stat_timer(&padapter->recvpriv);
+#endif
 #ifdef CONFIG_CONCURRENT_MODE
 	rtw_mi_buddy_reset_drv_sw(padapter);
 #endif
@@ -6009,13 +5990,3 @@ int rtw_vendor_ie_set_api(struct net_device *dev, char *extra)
 EXPORT_SYMBOL(rtw_vendor_ie_set_api);
 
 #endif
-
-int get_openhd_override_channel(void){
-    return openhd_override_channel;
-}
-int get_openhd_override_channel_width(void){
-    return openhd_override_channel_width;
-}
-int get_openhd_override_tx_power_mbm(void){
-    return openhd_override_tx_power_mbm;
-}

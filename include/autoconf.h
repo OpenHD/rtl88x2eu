@@ -19,8 +19,8 @@
  * Public  General Config
  */
 #define AUTOCONF_INCLUDED
-#define RTL871X_MODULE_NAME "rtl88x2eu_ohd"
-#define DRV_NAME "rtl88x2eu_ohd"
+#define RTL871X_MODULE_NAME "88x2EU"
+#define DRV_NAME "rtl88x2eu"
 
 /* Set CONFIG_RTL8822E from Makefile */
 #ifndef CONFIG_RTL8822E

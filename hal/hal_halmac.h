@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2015 - 2021 Realtek Corporation.
+ * Copyright(c) 2015 - 2024 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -252,5 +252,9 @@ int rtw_halmac_bf_cfg_mu_mimo(struct dvobj_priv *d, enum halmac_snd_role role,
 
 #endif /* RTW_BEAMFORMING_VERSION_2 */
 #endif /* CONFIG_BEAMFORMING */
+
+/* Debug related func */
+int rtw_halmac_cmd(struct dvobj_priv *d, char *input, u32 in_len,
+		   char *output, u32 out_len);
 
 #endif /* _HAL_HALMAC_H_ */

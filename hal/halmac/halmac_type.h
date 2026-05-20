@@ -2158,6 +2158,22 @@ struct halmac_h2c_info {
 	u8 seq_num;
 };
 
+struct halmac_fw_dbgcmd {
+	char *buf;
+	u32 out_len;
+	u32 used;
+	u32 cmd_idle;
+	u8 dbg_console_log_en:2;
+	u8 dbg_console_log_on:2;
+	u8 dbg_bg_log_en:2;
+	u8 dbg_bg_log_on:2;
+};
+
+
+struct halmac_lock_info {
+	HALMAC_MUTEX fw_dbgcmd_lock; /* protect halmac dbg cmd */
+};
+
 struct halmac_adapter {
 	enum halmac_dma_mapping pq_map[HALMAC_PQ_MAP_NUM];
 	enum halmac_dma_ch ch_map[HALMAC_PQ_MAP_NUM];
@@ -2201,8 +2217,10 @@ struct halmac_adapter {
 	u8 pwr_off_flow_flag;
 	u8 nlo_flag;
 	enum halmac_bw curr_bw;
+	struct halmac_fw_dbgcmd fw_dbgcmd;
 	struct halmac_rx_ignore_info rx_ignore_info;
 	struct halmac_watcher watcher;
+	struct halmac_lock_info lock_info;
 #if HALMAC_PLATFORM_TESTPROGRAM
 	struct halmisc_adapter *halmisc_adapter;
 #endif
