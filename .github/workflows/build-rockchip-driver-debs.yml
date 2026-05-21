@@ -1,0 +1,284 @@
+name: Build Rockchip Driver Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: Comma-separated OpenHD-ImageBuilder targets
+        required: false
+        default: radxa-rock3a_base,rock5a_base,rock5b_base,radxa-cm3,radxa-zero3w_base,core3566
+  push:
+    paths:
+      - ".github/workflows/build-rockchip-driver-debs.yml"
+      - "**"
+  pull_request:
+    paths:
+      - ".github/workflows/build-rockchip-driver-debs.yml"
+      - "**"
+
+jobs:
+  resolve-targets:
+    runs-on: ubuntu-22.04
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - id: targets
+        shell: bash
+        run: |
+          targets="${{ github.event.inputs.targets || 'radxa-rock3a_base,rock5a_base,rock5b_base,radxa-cm3,radxa-zero3w_base,core3566' }}"
+          json="$(printf '%s' "$targets" | jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')"
+          echo "targets=${json}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: resolve-targets
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(needs.resolve-targets.outputs.targets) }}
+
+    steps:
+      - name: Checkout driver
+        uses: actions/checkout@v4
+        with:
+          path: driver
+
+      - name: Checkout OpenHD ImageBuilder
+        uses: actions/checkout@v4
+        with:
+          repository: OpenHD/OpenHD-ImageBuilder
+          path: imagebuilder
+
+      - name: Cache base image archive
+        uses: actions/cache@v4
+        with:
+          path: work/${{ matrix.target }}/*.img.xz
+          key: rockchip-base-${{ matrix.target }}-${{ hashFiles('imagebuilder/images/**') }}
+          restore-keys: |
+            rockchip-base-${{ matrix.target }}-
+
+      - name: Build deb package
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+
+          case "${GITHUB_REPOSITORY##*/}" in
+            rtl8812au)
+              DRIVER_PACKAGE="rtl8812au"
+              MODULE_NAME="88XXau_ohd"
+              USER_MODULE_NAME_VALUE="88XXau"
+              ;;
+            rtl88x2bu)
+              DRIVER_PACKAGE="rtl88x2bu"
+              MODULE_NAME="88x2bu_ohd"
+              USER_MODULE_NAME_VALUE="88x2bu"
+              ;;
+            rtl88x2cu)
+              DRIVER_PACKAGE="rtl88x2cu"
+              MODULE_NAME="88x2cu_ohd"
+              USER_MODULE_NAME_VALUE=""
+              ;;
+            rtl88x2eu)
+              DRIVER_PACKAGE="rtl88x2eu"
+              MODULE_NAME="rtl88x2eu_ohd"
+              USER_MODULE_NAME_VALUE="rtl88x2eu_ohd"
+              ;;
+            *)
+              echo "Unsupported driver repo: ${GITHUB_REPOSITORY}" >&2
+              exit 1
+              ;;
+          esac
+
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ca-certificates curl xz-utils parted e2fsprogs util-linux rsync \
+            qemu-user-static binfmt-support file
+
+          CONFIG="imagebuilder/images/${TARGET}"
+          if [[ ! -f "${CONFIG}" ]]; then
+            echo "No OpenHD-ImageBuilder config for target ${TARGET}" >&2
+            exit 1
+          fi
+
+          # shellcheck disable=SC1090
+          source "${CONFIG}"
+          clean_value() { printf '%s' "${1:-}" | tr -d '\r'; }
+          BASE_IMAGE_URL="$(clean_value "${BASE_IMAGE_URL}")"
+          BASE_IMAGE="$(clean_value "${BASE_IMAGE}")"
+          BASE_IMAGE_SHA256="$(clean_value "${BASE_IMAGE_SHA256:-}")"
+          BASE_IMAGE_SHA512="$(clean_value "${BASE_IMAGE_SHA512:-}")"
+          OS="$(clean_value "${OS}")"
+          DISTRO="$(clean_value "${DISTRO}")"
+          ROOT_PART="$(clean_value "${ROOT_PART}")"
+          HAVE_CONF_PART="$(clean_value "${HAVE_CONF_PART:-false}")"
+          CONF_PART="$(clean_value "${CONF_PART:-}")"
+
+          WORK_DIR="${GITHUB_WORKSPACE}/work/${TARGET}"
+          OUT_DIR="${GITHUB_WORKSPACE}/out/${TARGET}"
+          MNT_DIR="${WORK_DIR}/mnt"
+          mkdir -p "${WORK_DIR}" "${OUT_DIR}" "${MNT_DIR}"
+
+          archive="${WORK_DIR}/${BASE_IMAGE}"
+          image="${WORK_DIR}/${BASE_IMAGE%.xz}"
+          if [[ ! -f "${archive}" ]]; then
+            separator="/"
+            [[ "${BASE_IMAGE_URL}" == */ ]] && separator=""
+            curl -L --fail --retry 3 -o "${archive}" "${BASE_IMAGE_URL}${separator}${BASE_IMAGE}"
+          fi
+          [[ -n "${BASE_IMAGE_SHA256}" ]] && echo "${BASE_IMAGE_SHA256}  ${archive}" | sha256sum -c -
+          [[ -n "${BASE_IMAGE_SHA512}" ]] && echo "${BASE_IMAGE_SHA512}  ${archive}" | sha512sum -c -
+          [[ -f "${image}" ]] || xz -dk "${archive}"
+
+          partition_field() {
+            local part="$1"
+            local field="$2"
+            sudo parted -s "${image}" unit b print | awk -v p="${part}" -v f="${field}" '$1 == p {gsub(/B/, "", $f); print $f}'
+          }
+
+          cleanup() {
+            sudo sync || true
+            sudo mountpoint -q "${MNT_DIR}/etc/resolv.conf" && sudo umount -l "${MNT_DIR}/etc/resolv.conf" || true
+            sudo mountpoint -q "${MNT_DIR}/sys" && sudo umount -l "${MNT_DIR}/sys" || true
+            sudo mountpoint -q "${MNT_DIR}/dev/pts" && sudo umount -l "${MNT_DIR}/dev/pts" || true
+            sudo mountpoint -q "${MNT_DIR}/dev" && sudo umount -l "${MNT_DIR}/dev" || true
+            sudo mountpoint -q "${MNT_DIR}/proc" && sudo umount -l "${MNT_DIR}/proc" || true
+            sudo mountpoint -q "${MNT_DIR}/conf" && sudo umount -l "${MNT_DIR}/conf" || true
+            sudo mountpoint -q "${MNT_DIR}" && sudo umount -l "${MNT_DIR}" || true
+          }
+          trap cleanup EXIT
+
+          root_offset="$(partition_field "${ROOT_PART}" 2)"
+          root_size="$(partition_field "${ROOT_PART}" 4)"
+          sudo mount -o "loop,offset=${root_offset},sizelimit=${root_size},rw" "${image}" "${MNT_DIR}"
+
+          if [[ "${HAVE_CONF_PART}" == "true" && -n "${CONF_PART}" ]]; then
+            conf_offset="$(partition_field "${CONF_PART}" 2)"
+            conf_size="$(partition_field "${CONF_PART}" 4)"
+            sudo mkdir -p "${MNT_DIR}/conf"
+            sudo mount -o "loop,offset=${conf_offset},sizelimit=${conf_size},rw" "${image}" "${MNT_DIR}/conf"
+          fi
+
+          sudo mkdir -p "${MNT_DIR}/opt/openhd-driver-build/src" "${MNT_DIR}/opt/openhd-driver-build/out"
+          sudo rsync -a --delete --exclude='.git' --exclude='.github' --exclude='*.o' --exclude='*.ko' \
+            --exclude='*.mod' --exclude='*.mod.c' --exclude='Module.symvers' --exclude='modules.order' \
+            driver/ "${MNT_DIR}/opt/openhd-driver-build/src/"
+          sudo cp /usr/bin/qemu-aarch64-static "${MNT_DIR}/usr/bin/" || true
+
+          sudo tee "${MNT_DIR}/opt/openhd-driver-build/build.sh" >/dev/null <<'CHROOT_SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          : "${TARGET:?}"
+          : "${OS:?}"
+          : "${DISTRO:?}"
+          : "${DRIVER_PACKAGE:?}"
+          : "${MODULE_NAME:?}"
+          : "${USER_MODULE_NAME_VALUE:=}"
+
+          SRC_DIR="/opt/openhd-driver-build/src"
+          OUT_DIR="/opt/openhd-driver-build/out"
+          short_sha="${GITHUB_SHA:-local}"
+          short_sha="${short_sha:0:7}"
+          VERSION="2.6.openhd.${GITHUB_RUN_NUMBER:-0}.${short_sha}"
+          DEB_TARGET="$(echo "${TARGET}" | tr '[:upper:]_' '[:lower:]-' | sed -E 's/[^a-z0-9+.-]+/-/g')"
+
+          export DEBIAN_FRONTEND=noninteractive
+
+          apt_update_tolerant() {
+            apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=2 \
+              -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          }
+
+          if [[ "${DISTRO}" == "bullseye" ]]; then
+            sed -i -E \
+              -e 's|https?://deb\.debian\.org/debian|http://archive.debian.org/debian|g' \
+              -e '/bullseye-backports/s/^[[:space:]]*deb/# &/' \
+              /etc/apt/sources.list 2>/dev/null || true
+            find /etc/apt/sources.list.d -name '*.list' -print0 2>/dev/null \
+              | xargs -0 -r sed -i -E \
+                -e 's|https?://deb\.debian\.org/debian|http://archive.debian.org/debian|g' \
+                -e '/bullseye-backports/s/^[[:space:]]*deb/# &/' || true
+          fi
+
+          apt_update_tolerant
+          apt-get install -y --no-install-recommends build-essential make gcc bc bison flex kmod dkms ca-certificates
+
+          ensure_headers() {
+            local kver="$1"
+            [[ -e "/lib/modules/${kver}/build/Makefile" ]] && return 0
+            apt-get install -y --no-install-recommends "linux-headers-${kver}" || true
+            if [[ ! -e "/lib/modules/${kver}/build/Makefile" ]]; then
+              header_dir="$(find /usr/src -maxdepth 1 -type d \( -name "linux-headers-${kver}" -o -name "*${kver}*" \) | head -n1 || true)"
+              [[ -n "${header_dir}" ]] && ln -sfn "${header_dir}" "/lib/modules/${kver}/build"
+            fi
+            [[ -e "/lib/modules/${kver}/build/Makefile" ]]
+          }
+
+          package_driver() {
+            local kver="$1"
+            local ko="$2"
+            local package_name="${DRIVER_PACKAGE}-${DEB_TARGET}-${kver}"
+            package_name="$(echo "${package_name}" | tr '[:upper:]_' '[:lower:]-' | sed -E 's/[^a-z0-9+.-]+/-/g')"
+            local pkg_dir="/opt/openhd-driver-build/pkg/${package_name}"
+            rm -rf "${pkg_dir}"
+            mkdir -p "${pkg_dir}/DEBIAN" "${pkg_dir}/lib/modules/${kver}/kernel/drivers/net/wireless"
+            install -m 0644 "${ko}" "${pkg_dir}/lib/modules/${kver}/kernel/drivers/net/wireless/${MODULE_NAME}.ko"
+            cat > "${pkg_dir}/DEBIAN/control" <<EOF
+          Package: ${package_name}
+          Version: ${VERSION}
+          Section: kernel
+          Priority: optional
+          Architecture: arm64
+          Maintainer: OpenHD <maintainers@openhd.org>
+          Depends: kmod
+          Description: OpenHD ${DRIVER_PACKAGE} kernel module for ${TARGET} ${kver}
+           Built by GitHub Actions from ${GITHUB_REPOSITORY:-local}.
+          EOF
+            cat > "${pkg_dir}/DEBIAN/postinst" <<EOF
+          #!/bin/sh
+          set -e
+          depmod -a ${kver} || true
+          exit 0
+          EOF
+            chmod 0755 "${pkg_dir}/DEBIAN/postinst"
+            dpkg-deb --build "${pkg_dir}" "${OUT_DIR}/${package_name}_${VERSION}_arm64.deb"
+          }
+
+          mapfile -t kernels < <(find /lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+          [[ "${#kernels[@]}" -gt 0 ]]
+          for kver in "${kernels[@]}"; do
+            ensure_headers "${kver}"
+            make -C "${SRC_DIR}" clean || true
+            make_args=(-C "${SRC_DIR}" -j"$(nproc)" ARCH=arm64 KVER="${kver}" KSRC="/lib/modules/${kver}/build")
+            [[ -n "${USER_MODULE_NAME_VALUE}" ]] && make_args+=(USER_MODULE_NAME="${USER_MODULE_NAME_VALUE}")
+            make "${make_args[@]}" modules
+            ko="${SRC_DIR}/${MODULE_NAME}.ko"
+            [[ -f "${ko}" ]] || ko="$(find "${SRC_DIR}" -maxdepth 1 -name '*.ko' | head -n1)"
+            package_driver "${kver}" "${ko}"
+          done
+          CHROOT_SCRIPT
+
+          sudo chmod 0755 "${MNT_DIR}/opt/openhd-driver-build/build.sh"
+          sudo mount -t proc proc "${MNT_DIR}/proc"
+          sudo mount --bind /dev "${MNT_DIR}/dev"
+          sudo mount --bind /dev/pts "${MNT_DIR}/dev/pts"
+          sudo mount --bind /sys "${MNT_DIR}/sys"
+          sudo rm -f "${MNT_DIR}/etc/resolv.conf"
+          sudo touch "${MNT_DIR}/etc/resolv.conf"
+          sudo mount --bind /etc/resolv.conf "${MNT_DIR}/etc/resolv.conf"
+
+          sudo --preserve-env=TARGET,OS,DISTRO,DRIVER_PACKAGE,MODULE_NAME,USER_MODULE_NAME_VALUE,GITHUB_SHA,GITHUB_RUN_NUMBER,GITHUB_REPOSITORY \
+            chroot "${MNT_DIR}" /usr/bin/qemu-aarch64-static /bin/bash /opt/openhd-driver-build/build.sh
+
+          sudo cp -v "${MNT_DIR}"/opt/openhd-driver-build/out/*.deb "${OUT_DIR}/"
+
+      - name: Upload deb packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}-${{ matrix.target }}-debs
+          path: out/${{ matrix.target }}/*.deb
+          if-no-files-found: error
