@@ -67,6 +67,7 @@ make clean || true
 make -j"$(nproc)" \
   ARCH=arm64 \
   CC="${KERNEL_CC}" \
+  KCFLAGS="-Wno-error=implicit-fallthrough -Wno-error=stringop-overread" \
   KVER="${KERNEL_VERSION}" \
   KSRC="/lib/modules/${KERNEL_VERSION}/build" \
   M="${PWD}" \
