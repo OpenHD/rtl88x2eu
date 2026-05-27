@@ -1,6 +1,10 @@
 name: build on x86 noble
 
-on: [push]
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore:
+      - stock_2026_driver
 
 
 jobs:

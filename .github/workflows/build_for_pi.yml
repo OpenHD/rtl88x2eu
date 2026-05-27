@@ -1,6 +1,10 @@
 name: build on rpi
 
-on: [push]
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore:
+      - stock_2026_driver
 
 
 jobs:

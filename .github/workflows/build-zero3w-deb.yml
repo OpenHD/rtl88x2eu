@@ -21,6 +21,7 @@ on:
     paths:
       - ".github/scripts/build-zero3w-deb.sh"
       - ".github/workflows/build-zero3w-deb.yml"
+      - ".github/workflows/*.yml"
       - "Makefile"
       - "dkms.conf"
       - "realtek_88x2eu.conf"

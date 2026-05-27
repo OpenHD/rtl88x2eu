@@ -1,6 +1,10 @@
 name: Build test
 
-on: [push]
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore:
+      - stock_2026_driver
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
