@@ -27,8 +27,20 @@ curl -1sLf 'https://dl.cloudsmith.io/public/openhd/dev-release/setup.deb.sh' \
   | distro=debian codename=bookworm bash
 
 apt-get update
-apt-get install -y --no-install-recommends \
-  "linux-headers-${KERNEL_VERSION}=${KERNEL_PACKAGE_VERSION}"
+headers_download_dir="$(mktemp -d)"
+(
+  cd "${headers_download_dir}"
+  apt-get download "linux-headers-${KERNEL_VERSION}=${KERNEL_PACKAGE_VERSION}"
+)
+headers_deb="$(find "${headers_download_dir}" -maxdepth 1 -name "linux-headers-${KERNEL_VERSION}_*.deb" -print -quit)"
+if [[ -z "${headers_deb}" || ! -f "${headers_deb}" ]]; then
+  echo "Failed to download linux-headers-${KERNEL_VERSION}=${KERNEL_PACKAGE_VERSION}" >&2
+  exit 1
+fi
+
+# Extract only the header payload. Installing the package would run maintainer
+# scripts under the GitHub host kernel uname, not the Zero 3W target kernel.
+dpkg-deb -x "${headers_deb}" /
 
 headers_dir="/usr/src/linux-headers-${KERNEL_VERSION}"
 if [[ ! -e "${headers_dir}/Makefile" ]]; then
@@ -41,6 +53,7 @@ fi
 
 mkdir -p "/lib/modules/${KERNEL_VERSION}"
 ln -sfn "${headers_dir}" "/lib/modules/${KERNEL_VERSION}/build"
+ls -ld "/lib/modules/${KERNEL_VERSION}/build"
 
 make clean || true
 make -j"$(nproc)" \
