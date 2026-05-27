@@ -19,9 +19,15 @@ apt-get install -y --no-install-recommends \
   dpkg-dev \
   file \
   flex \
+  g++-12 \
+  gcc-12 \
   gnupg \
   kmod \
   make
+
+: "${KERNEL_CC:=gcc-12}"
+command -v "${KERNEL_CC}"
+"${KERNEL_CC}" --version | head -n1
 
 curl -1sLf 'https://dl.cloudsmith.io/public/openhd/dev-release/setup.deb.sh' \
   | distro=debian codename=bookworm bash
@@ -60,6 +66,7 @@ ls -ld "/lib/modules/${KERNEL_VERSION}/build"
 make clean || true
 make -j"$(nproc)" \
   ARCH=arm64 \
+  CC="${KERNEL_CC}" \
   KVER="${KERNEL_VERSION}" \
   KSRC="/lib/modules/${KERNEL_VERSION}/build" \
   M="${PWD}" \
