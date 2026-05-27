@@ -38,13 +38,15 @@ if [[ -z "${headers_deb}" || ! -f "${headers_deb}" ]]; then
   exit 1
 fi
 
-# Extract only the header payload. Installing the package would run maintainer
-# scripts under the GitHub host kernel uname, not the Zero 3W target kernel.
-dpkg-deb -x "${headers_deb}" /
+# Extract only the header payload into an isolated tree. Installing the package
+# would run maintainer scripts under the GitHub host kernel uname, and extracting
+# into / can break merged-/usr containers that keep /lib as a symlink.
+headers_extract_dir="$(mktemp -d)"
+dpkg-deb -x "${headers_deb}" "${headers_extract_dir}"
 
-headers_dir="/usr/src/linux-headers-${KERNEL_VERSION}"
+headers_dir="${headers_extract_dir}/usr/src/linux-headers-${KERNEL_VERSION}"
 if [[ ! -e "${headers_dir}/Makefile" ]]; then
-  headers_dir="$(find /usr/src -maxdepth 1 -type d -name "*${KERNEL_VERSION}*" | head -n1)"
+  headers_dir="$(find "${headers_extract_dir}" -type d -name "*${KERNEL_VERSION}*" | head -n1)"
 fi
 if [[ -z "${headers_dir}" || ! -e "${headers_dir}/Makefile" ]]; then
   echo "Unable to locate kernel headers for ${KERNEL_VERSION}" >&2
