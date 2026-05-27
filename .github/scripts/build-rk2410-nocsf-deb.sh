@@ -3,7 +3,7 @@ set -euo pipefail
 
 : "${KERNEL_VERSION:=6.1.84-16-rk2410-nocsf}"
 : "${KERNEL_PACKAGE_VERSION:=6.1.84-16}"
-: "${PACKAGE_NAME:=rtl88x2eu-ohd-zero3w}"
+: "${PACKAGE_NAME:=rtl88x2eu-ohd-rk2410-nocsf}"
 : "${PACKAGE_VERSION:=2.6.openhd.0.local}"
 : "${MODULE_NAME:=rtl88x2eu_ohd}"
 
@@ -107,8 +107,8 @@ Priority: optional
 Architecture: arm64
 Maintainer: OpenHD <maintainers@openhd.org>
 Depends: kmod, linux-image-${KERNEL_VERSION} (= ${KERNEL_PACKAGE_VERSION})
-Description: OpenHD RTL88x2EU kernel module for Radxa Zero 3W
- Prebuilt rtl88x2eu_ohd module for the Radxa Zero 3W OpenHD Lite kernel.
+Description: OpenHD RTL88x2EU kernel module for rk2410-nocsf
+ Prebuilt rtl88x2eu_ohd module for the OpenHD rk2410-nocsf kernel.
 EOF
 
 cat > "${pkg_root}/DEBIAN/postinst" <<EOF

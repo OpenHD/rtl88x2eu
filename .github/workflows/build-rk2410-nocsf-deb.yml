@@ -1,4 +1,4 @@
-name: Build Zero 3W RTL88x2EU Package
+name: Build RK2410 RTL88x2EU Package
 
 on:
   workflow_dispatch:
@@ -19,8 +19,8 @@ on:
     branches:
       - stock_2026_driver
     paths:
-      - ".github/scripts/build-zero3w-deb.sh"
-      - ".github/workflows/build-zero3w-deb.yml"
+      - ".github/scripts/build-rk2410-nocsf-deb.sh"
+      - ".github/workflows/build-rk2410-nocsf-deb.yml"
       - ".github/workflows/*.yml"
       - "Makefile"
       - "dkms.conf"
@@ -63,17 +63,17 @@ jobs:
       - name: Build arm64 deb
         shell: bash
         env:
-          PACKAGE_NAME: rtl88x2eu-ohd-zero3w
+          PACKAGE_NAME: rtl88x2eu-ohd-rk2410-nocsf
           MODULE_NAME: rtl88x2eu_ohd
         run: |
           sudo --preserve-env=GITHUB_SHA,KERNEL_VERSION,KERNEL_PACKAGE_VERSION,PACKAGE_NAME,PACKAGE_VERSION,MODULE_NAME \
-            bash .github/scripts/build-zero3w-deb.sh
+            bash .github/scripts/build-rk2410-nocsf-deb.sh
           sudo chown -R "${USER}:${USER}" dist
 
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rtl88x2eu-ohd-zero3w-${{ env.KERNEL_VERSION }}
+          name: rtl88x2eu-ohd-rk2410-nocsf-${{ env.KERNEL_VERSION }}
           path: dist/*.deb
           if-no-files-found: error
 
