@@ -201,9 +201,17 @@ static struct ieee80211_channel rtw_2ghz_channels[MAX_CHANNEL_NUM_2G] = {
 
 /* from center_ch_5g_20m */
 static struct ieee80211_channel rtw_5ghz_a_channels[MAX_CHANNEL_NUM_5G] = {
+	/* unlocked 5080~5160 MHz */
+	CHAN5G(16, 0),
+	CHAN5G(20, 0),	CHAN5G(24, 0),	CHAN5G(28, 0),	CHAN5G(32, 0),
+
 	CHAN5G(36, 0),	CHAN5G(40, 0),	CHAN5G(44, 0),	CHAN5G(48, 0),
 
 	CHAN5G(52, 0),	CHAN5G(56, 0),	CHAN5G(60, 0),	CHAN5G(64, 0),
+
+	/* unlocked 5340~5480 MHz */
+	CHAN5G(68, 0),	CHAN5G(72, 0),	CHAN5G(76, 0),	CHAN5G(80, 0),
+	CHAN5G(84, 0),	CHAN5G(88, 0),	CHAN5G(92, 0),	CHAN5G(96, 0),
 
 	CHAN5G(100, 0),	CHAN5G(104, 0),	CHAN5G(108, 0),	CHAN5G(112, 0),
 	CHAN5G(116, 0),	CHAN5G(120, 0),	CHAN5G(124, 0),	CHAN5G(128, 0),
@@ -211,6 +219,13 @@ static struct ieee80211_channel rtw_5ghz_a_channels[MAX_CHANNEL_NUM_5G] = {
 
 	CHAN5G(149, 0),	CHAN5G(153, 0),	CHAN5G(157, 0),	CHAN5G(161, 0),
 	CHAN5G(165, 0),	CHAN5G(169, 0),	CHAN5G(173, 0),	CHAN5G(177, 0),
+
+	/* unlocked 5905~6265 MHz */
+	CHAN5G(181, 0),	CHAN5G(185, 0),	CHAN5G(189, 0),	CHAN5G(193, 0),
+	CHAN5G(197, 0),	CHAN5G(201, 0),	CHAN5G(205, 0),	CHAN5G(209, 0),
+	CHAN5G(213, 0),	CHAN5G(217, 0),	CHAN5G(221, 0),	CHAN5G(225, 0),
+	CHAN5G(229, 0), CHAN5G(233, 0), CHAN5G(237, 0), CHAN5G(241, 0),
+	CHAN5G(245, 0), CHAN5G(249, 0), CHAN5G(253, 0),
 };
 
 enum nl80211_band _rtw_band_to_nl80211_band[] = {

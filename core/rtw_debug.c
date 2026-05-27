@@ -35,6 +35,10 @@ const char *rtw_log_level_str[] = {
 
 #include <rtw_version.h>
 
+#ifndef RTW_GIT_HASH
+#define RTW_GIT_HASH "unknown"
+#endif
+
 #ifdef CONFIG_TDLS
 	#define TDLS_DBG_INFO_SPACE_BTWN_ITEM_AND_VALUE	41
 #endif
@@ -42,6 +46,8 @@ const char *rtw_log_level_str[] = {
 void dump_drv_version(void *sel)
 {
 	RTW_PRINT_SEL(sel, "%s %s\n", DRV_NAME, DRIVERVERSION);
+	RTW_PRINT_SEL(sel, "btcoex: %s\n", BTCOEXVERSION);
+	RTW_PRINT_SEL(sel, "git hash: %s\n", RTW_GIT_HASH);
 	RTW_PRINT_SEL(sel, "build time: %s %s\n", __DATE__, __TIME__);
 }
 

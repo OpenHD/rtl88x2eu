@@ -28,9 +28,9 @@
 #define CENTER_CH_2G_NUM		14
 #define CENTER_CH_2G_40M_NUM	9
 
-#define CENTER_CH_5G_20M_NUM	28	/* 20M center channels */
-#define CENTER_CH_5G_40M_NUM	14	/* 40M center channels */
-#define CENTER_CH_5G_80M_NUM	7	/* 80M center channels */
+#define CENTER_CH_5G_20M_NUM	60	/* 20M center channels */
+#define CENTER_CH_5G_40M_NUM	28	/* 40M center channels */
+#define CENTER_CH_5G_80M_NUM	13	/* 80M center channels */
 #define CENTER_CH_5G_160M_NUM	3	/* 160M center channels */
 #define CENTER_CH_5G_ALL_NUM	(CENTER_CH_5G_20M_NUM + CENTER_CH_5G_40M_NUM + CENTER_CH_5G_80M_NUM)
 
@@ -319,7 +319,7 @@ void rtw_rf_set_tx_gain_offset(_adapter *adapter, u8 path, s8 offset);
 void rtw_rf_apply_tx_gain_offset(_adapter *adapter, u8 ch);
 
 RTW_FUNC_2G_5G_ONLY static inline bool rtw_is_2g_ch(u8 ch) { return ch >= 1 && ch <= 14; }
-RTW_FUNC_2G_5G_ONLY static inline bool rtw_is_5g_ch(u8 ch) { return ch >= 36 && ch <= 177; }
+RTW_FUNC_2G_5G_ONLY static inline bool rtw_is_5g_ch(u8 ch) { return ch >= 16 && ch <= 253; }
 
 bool rtw_is_long_cac_range(u32 hi, u32 lo, u8 dfs_region);
 RTW_FUNC_2G_5G_ONLY bool rtw_is_long_cac_ch(u8 ch, u8 bw, u8 offset, u8 dfs_region);

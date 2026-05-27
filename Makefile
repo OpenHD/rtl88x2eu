@@ -37,6 +37,9 @@ EXTRA_CFLAGS += -I$(src)/include
 
 EXTRA_LDFLAGS += --strip-debug
 
+RTW_GIT_HASH ?= $(shell git -C "$(if $(src),$(src),$(CURDIR))" rev-parse --short=12 HEAD 2>/dev/null || printf '%s' "$${GITHUB_SHA:-unknown}" | cut -c1-12)
+EXTRA_CFLAGS += -DRTW_GIT_HASH=\"$(RTW_GIT_HASH)\"
+
 CONFIG_AUTOCFG_CP = n
 
 ########################## WIFI IC ############################
@@ -74,7 +77,7 @@ CONFIG_IPS_MODE = 0
 CONFIG_LPS_MODE = 0
 CONFIG_USB_AUTOSUSPEND = n
 CONFIG_HW_PWRP_DETECTION = n
-CONFIG_BT_COEXIST = y
+CONFIG_BT_COEXIST = n
 CONFIG_WAPI_SUPPORT = n
 CONFIG_EFUSE_CONFIG_FILE = y
 CONFIG_EXT_CLK = n
@@ -94,7 +97,7 @@ CONFIG_80211W = y
 CONFIG_REDUCE_TX_CPU_LOADING = n
 CONFIG_BR_EXT = y
 CONFIG_TDLS = n
-CONFIG_WIFI_MONITOR = n
+CONFIG_WIFI_MONITOR = y
 CONFIG_MCC_MODE = n
 CONFIG_APPEND_VENDOR_IE_ENABLE = n
 CONFIG_RTW_NAPI = y
@@ -1052,11 +1055,7 @@ endif
 ifeq ($(CONFIG_RTL8822E), y)
 RTL871X := rtl8822e
 ifeq ($(CONFIG_USB_HCI), y)
-ifeq ($(CONFIG_BT_COEXIST), n)
-MODULE_NAME = 8812eu
-else
-MODULE_NAME = 88x2eu
-endif
+MODULE_NAME = rtl88x2eu_ohd
 endif
 ifeq ($(CONFIG_PCI_HCI), y)
 MODULE_NAME = 88x2ee
