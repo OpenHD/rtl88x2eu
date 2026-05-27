@@ -8,10 +8,14 @@ on:
         required: false
         default: radxa-rock3a_base,rock5a_base,rock5b_base,radxa-cm3,radxa-zero3w_base,core3566
   push:
+    branches-ignore:
+      - stock_2026_driver
     paths:
       - ".github/workflows/build-rockchip-driver-debs.yml"
       - "**"
   pull_request:
+    branches-ignore:
+      - stock_2026_driver
     paths:
       - ".github/workflows/build-rockchip-driver-debs.yml"
       - "**"
