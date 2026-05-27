@@ -65,7 +65,10 @@ jobs:
         env:
           PACKAGE_NAME: rtl88x2eu-ohd-zero3w
           MODULE_NAME: rtl88x2eu_ohd
-        run: bash .github/scripts/build-zero3w-deb.sh
+        run: |
+          sudo --preserve-env=GITHUB_SHA,KERNEL_VERSION,KERNEL_PACKAGE_VERSION,PACKAGE_NAME,PACKAGE_VERSION,MODULE_NAME \
+            bash .github/scripts/build-zero3w-deb.sh
+          sudo chown -R "${USER}:${USER}" dist
 
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
