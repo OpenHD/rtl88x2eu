@@ -6,7 +6,7 @@ on:
       targets:
         description: Comma-separated OpenHD-ImageBuilder targets
         required: false
-        default: radxa-rock3a_base,rock5a_base,rock5b_base,radxa-cm3,radxa-zero3w_base,core3566
+        default: radxa-rock3a_base,rock5a_base,rock5b_base,radxa-cm3,radxa-zero3w_base,radxa-zero3w-lite_base,core3566
   push:
     branches-ignore:
       - stock_2026_driver
@@ -29,7 +29,7 @@ jobs:
       - id: targets
         shell: bash
         run: |
-          targets="${{ github.event.inputs.targets || 'radxa-rock3a_base,rock5a_base,rock5b_base,radxa-cm3,radxa-zero3w_base,core3566' }}"
+          targets="${{ github.event.inputs.targets || 'radxa-rock3a_base,rock5a_base,rock5b_base,radxa-cm3,radxa-zero3w_base,radxa-zero3w-lite_base,core3566' }}"
           json="$(printf '%s' "$targets" | jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')"
           echo "targets=${json}" >> "$GITHUB_OUTPUT"
 
@@ -125,9 +125,11 @@ jobs:
           BASE_IMAGE_SHA512="$(clean_value "${BASE_IMAGE_SHA512:-}")"
           OS="$(clean_value "${OS}")"
           DISTRO="$(clean_value "${DISTRO}")"
+          echo "CLOUDSMITH_RELEASE=${DISTRO}" >> "$GITHUB_ENV"
           ROOT_PART="$(clean_value "${ROOT_PART}")"
           HAVE_CONF_PART="$(clean_value "${HAVE_CONF_PART:-false}")"
           CONF_PART="$(clean_value "${CONF_PART:-}")"
+          KERNEL_PACKAGES="$(clean_value "${KERNEL_PACKAGES:-}")"
 
           WORK_DIR="${GITHUB_WORKSPACE}/work/${TARGET}"
           OUT_DIR="${GITHUB_WORKSPACE}/out/${TARGET}"
@@ -190,6 +192,7 @@ jobs:
           : "${DRIVER_PACKAGE:?}"
           : "${MODULE_NAME:?}"
           : "${USER_MODULE_NAME_VALUE:=}"
+          : "${KERNEL_PACKAGES:=}"
 
           SRC_DIR="/opt/openhd-driver-build/src"
           OUT_DIR="/opt/openhd-driver-build/out"
@@ -218,6 +221,9 @@ jobs:
 
           apt_update_tolerant
           apt-get install -y --no-install-recommends build-essential make gcc bc bison flex kmod dkms ca-certificates
+          if [[ -n "${KERNEL_PACKAGES}" ]]; then
+            apt-get install -y --no-install-recommends ${KERNEL_PACKAGES}
+          fi
 
           ensure_headers() {
             local kver="$1"
@@ -283,9 +289,9 @@ jobs:
           sudo touch "${MNT_DIR}/etc/resolv.conf"
           sudo mount --bind /etc/resolv.conf "${MNT_DIR}/etc/resolv.conf"
 
-          export TARGET OS DISTRO DRIVER_PACKAGE MODULE_NAME USER_MODULE_NAME_VALUE
+          export TARGET OS DISTRO DRIVER_PACKAGE MODULE_NAME USER_MODULE_NAME_VALUE KERNEL_PACKAGES
           export GITHUB_SHA GITHUB_RUN_NUMBER GITHUB_REPOSITORY
-          sudo --preserve-env=TARGET,OS,DISTRO,DRIVER_PACKAGE,MODULE_NAME,USER_MODULE_NAME_VALUE,GITHUB_SHA,GITHUB_RUN_NUMBER,GITHUB_REPOSITORY \
+          sudo --preserve-env=TARGET,OS,DISTRO,DRIVER_PACKAGE,MODULE_NAME,USER_MODULE_NAME_VALUE,KERNEL_PACKAGES,GITHUB_SHA,GITHUB_RUN_NUMBER,GITHUB_REPOSITORY \
             chroot "${MNT_DIR}" /usr/bin/qemu-aarch64-static /bin/bash /opt/openhd-driver-build/build.sh
 
           sudo cp -v "${MNT_DIR}"/opt/openhd-driver-build/out/*.deb "${OUT_DIR}/"
@@ -296,3 +302,17 @@ jobs:
           name: ${{ github.event.repository.name }}-${{ matrix.target }}-debs
           path: out/${{ matrix.target }}/*.deb
           if-no-files-found: error
+
+      - name: Push deb packages to Cloudsmith
+        if: github.event_name != 'pull_request'
+        uses: cloudsmith-io/action@master
+        with:
+          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          command: push
+          format: deb
+          owner: openhd
+          repo: dev-release
+          distro: debian
+          release: ${{ env.CLOUDSMITH_RELEASE }}
+          republish: true
+          file: out/${{ matrix.target }}/*.deb
