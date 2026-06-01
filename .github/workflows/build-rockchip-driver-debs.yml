@@ -307,14 +307,13 @@ jobs:
 
       - name: Push deb packages to Cloudsmith
         if: github.event_name != 'pull_request'
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: push
-          format: deb
-          owner: openhd
-          repo: dev-release
-          distro: debian
-          release: ${{ env.CLOUDSMITH_RELEASE }}
-          republish: true
-          file: out/${{ matrix.target }}/*.deb
+        shell: bash
+        env:
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user --upgrade cloudsmith-cli
+          export PATH="${HOME}/.local/bin:${PATH}"
+          for deb in out/${{ matrix.target }}/*.deb; do
+            cloudsmith push deb --api-key "${CLOUDSMITH_API_KEY}" --republish "openhd/dev-release/debian/${CLOUDSMITH_RELEASE}" "${deb}"
+          done
