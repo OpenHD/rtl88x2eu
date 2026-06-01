@@ -15,22 +15,6 @@ on:
         description: Optional Debian package version override
         required: false
         default: ""
-  push:
-    branches:
-      - stock_2026_driver
-    paths:
-      - ".github/scripts/build-rk2410-nocsf-deb.sh"
-      - ".github/workflows/build-rk2410-nocsf-deb.yml"
-      - ".github/workflows/*.yml"
-      - "Makefile"
-      - "dkms.conf"
-      - "realtek_88x2eu.conf"
-      - "*.c"
-      - "*.h"
-      - "*.mk"
-      - "**/*.c"
-      - "**/*.h"
-      - "**/*.mk"
 
 permissions:
   contents: read
