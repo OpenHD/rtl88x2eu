@@ -221,8 +221,10 @@ jobs:
 
           apt_update_tolerant
           apt-get install -y --no-install-recommends build-essential make gcc bc bison flex kmod dkms ca-certificates
+          curl -1sLf "https://dl.cloudsmith.io/public/openhd/dev-release/setup.deb.sh" | bash || true
+          apt_update_tolerant
           if [[ -n "${KERNEL_PACKAGES}" ]]; then
-            apt-get install -y --no-install-recommends ${KERNEL_PACKAGES}
+            apt-get install -y --allow-downgrades --no-install-recommends ${KERNEL_PACKAGES}
           fi
 
           ensure_headers() {
