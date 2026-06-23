@@ -22,6 +22,12 @@ MODULE_DESCRIPTION("Realtek Wireless Lan Driver");
 MODULE_AUTHOR("Realtek Semiconductor Corp.");
 MODULE_VERSION(DRIVERVERSION);
 
+#if (defined(MODULE_IMPORT_NS) && LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
+MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
+#elif (defined(MODULE_IMPORT_NS) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
 #define strlcpy(p, q, s) strscpy(p, q, s)
 #endif
