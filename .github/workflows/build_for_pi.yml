@@ -1,10 +1,6 @@
 name: build on rpi
 
-on:
-  workflow_dispatch:
-  push:
-    branches-ignore:
-      - stock_2026_driver
+on: [push]
 
 
 jobs:
@@ -26,8 +22,8 @@ jobs:
       - name: test
         run: |
           echo "DT=$(date +'%Y-%m-%d_%H%M')" >> $GITHUB_ENV
-          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV    
-             
+          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
+
       - name: Checkout repository and submodules
         uses: actions/checkout@v3
         with:
@@ -39,7 +35,7 @@ jobs:
           git clone https://github.com/OpenHD/rtl88x2eu -b ${{ github.ref_name }} /opt/ChrootCompilationTest/additionalFiles/ --recursive
           echo $CLOUDSMITH_API_KEY > /opt/ChrootCompilationTest/additionalFiles/cloudsmith_api_key.txt
           echo "armhf" > /opt/ChrootCompilationTest/additionalFiles/arch.txt
-          echo "debian" > /opt/ChrootCompilationTest/additionalFiles/distro.txt
+          echo "raspbian" > /opt/ChrootCompilationTest/additionalFiles/distro.txt
           echo "bullseye" > /opt/ChrootCompilationTest/additionalFiles/flavor.txt
           echo "${{ github.ref_name }}" > /opt/ChrootCompilationTest/additionalFiles/repo.txt
 
