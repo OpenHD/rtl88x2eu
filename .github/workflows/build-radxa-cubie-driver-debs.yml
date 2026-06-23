@@ -277,16 +277,22 @@ jobs:
 
           mapfile -t kernels < <(find /lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           [[ "${#kernels[@]}" -gt 0 ]]
+          built_count=0
           for kver in "${kernels[@]}"; do
-            ensure_headers "${kver}"
-            make -C "${SRC_DIR}" clean || true
+            if ! ensure_headers "${kver}"; then
+              echo "::warning::Skipping ${kver}; kernel headers are unavailable"
+              continue
+            fi
+            make -C "${SRC_DIR}" ARCH=arm64 KVER="${kver}" KSRC="/lib/modules/${kver}/build" clean || true
             make_args=(-C "${SRC_DIR}" -j"$(nproc)" ARCH=arm64 KVER="${kver}" KSRC="/lib/modules/${kver}/build" USER_EXTRA_CFLAGS="$(supported_extra_cflags)")
             [[ -n "${USER_MODULE_NAME_VALUE}" ]] && make_args+=(USER_MODULE_NAME="${USER_MODULE_NAME_VALUE}")
             make "${make_args[@]}" modules
             ko="${SRC_DIR}/${MODULE_NAME}.ko"
             [[ -f "${ko}" ]] || ko="$(find "${SRC_DIR}" -maxdepth 1 -name '*.ko' | head -n1)"
             package_driver "${kver}" "${ko}"
+            built_count=$((built_count + 1))
           done
+          [[ "${built_count}" -gt 0 ]] || { echo "No kernel modules were packaged; no usable kernel headers found" >&2; exit 1; }
           CHROOT_SCRIPT
 
           sudo chmod 0755 "${MNT_DIR}/opt/openhd-driver-build/build.sh"
