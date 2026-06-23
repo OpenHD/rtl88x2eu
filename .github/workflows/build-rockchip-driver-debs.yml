@@ -8,14 +8,10 @@ on:
         required: false
         default: radxa-rock3a_base,rock5a_base,rock5b_base
   push:
-    branches-ignore:
-      - stock_2026_driver
     paths:
       - ".github/workflows/build-rockchip-driver-debs.yml"
       - "**"
   pull_request:
-    branches-ignore:
-      - stock_2026_driver
     paths:
       - ".github/workflows/build-rockchip-driver-debs.yml"
       - "**"
@@ -390,7 +386,7 @@ jobs:
               echo "::warning::Skipping ${kver}; kernel headers are unavailable"
               continue
             fi
-            make -C "${SRC_DIR}" ARCH=arm64 KVER="${kver}" KSRC="/lib/modules/${kver}/build" clean || true
+            make -C "${SRC_DIR}" clean || true
             make_args=(-C "${SRC_DIR}" -j"$(nproc)" ARCH=arm64 KVER="${kver}" KSRC="/lib/modules/${kver}/build" KCFLAGS="${warning_flags}" USER_EXTRA_CFLAGS="${warning_flags}")
             [[ -n "${USER_MODULE_NAME_VALUE}" ]] && make_args+=(USER_MODULE_NAME="${USER_MODULE_NAME_VALUE}")
             make "${make_args[@]}" modules
