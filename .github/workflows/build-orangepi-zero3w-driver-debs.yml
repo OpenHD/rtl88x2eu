@@ -260,9 +260,10 @@ jobs:
           ensure_headers() {
             local kver="$1"
             local build_dir="/lib/modules/${kver}/build"
+            local kernel_suffix=""
             [[ -e "${build_dir}/Makefile" ]] || apt-get install -y --no-install-recommends "linux-headers-${kver}" || true
             if [[ ! -e "${build_dir}/Makefile" && "${kver}" =~ ^[0-9].*-([A-Za-z0-9._-]+)$ ]]; then
-              local kernel_suffix="${BASH_REMATCH[1]}"
+              kernel_suffix="${BASH_REMATCH[1]}"
               for header_pkg in \
                 "linux-headers-current-${kernel_suffix}" \
                 "linux-headers-vendor-${kernel_suffix}" \
@@ -270,6 +271,10 @@ jobs:
                 "linux-headers-edge-${kernel_suffix}"; do
                 apt-get install -y --no-install-recommends "${header_pkg}" && break || true
               done
+            fi
+            if [[ ! -e "${build_dir}/Makefile" ]]; then
+              header_deb="$(find /opt /boot /usr/local -maxdepth 3 -type f \( -name "linux-headers*${kver}*.deb" -o -name "linux-headers*${kernel_suffix}*.deb" \) 2>/dev/null | head -n1 || true)"
+              [[ -n "${header_deb}" ]] && dpkg -i "${header_deb}" || true
             fi
             if [[ ! -e "/lib/modules/${kver}/build/Makefile" ]]; then
               header_dir="$(find /usr/src -maxdepth 1 -type d \( -name "linux-headers-${kver}" -o -name "*${kver}*" \) | head -n1 || true)"
@@ -338,8 +343,12 @@ jobs:
 
           mapfile -t kernels < <(find /lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           [[ "${#kernels[@]}" -gt 0 ]]
+          built_count=0
           for kver in "${kernels[@]}"; do
-            ensure_headers "${kver}"
+            if ! ensure_headers "${kver}"; then
+              echo "::warning::Skipping ${kver}; kernel headers are unavailable"
+              continue
+            fi
             make -C "${SRC_DIR}" clean || true
             make_args=(-C "${SRC_DIR}" -j"$(nproc)" ARCH=arm64 KVER="${kver}" KSRC="/lib/modules/${kver}/build" USER_EXTRA_CFLAGS="$(supported_extra_cflags)")
             [[ -n "${USER_MODULE_NAME_VALUE}" ]] && make_args+=(USER_MODULE_NAME="${USER_MODULE_NAME_VALUE}")
@@ -347,7 +356,9 @@ jobs:
             ko="${SRC_DIR}/${MODULE_NAME}.ko"
             [[ -f "${ko}" ]] || ko="$(find "${SRC_DIR}" -maxdepth 1 -name '*.ko' | head -n1)"
             package_driver "${kver}" "${ko}"
+            built_count=$((built_count + 1))
           done
+          [[ "${built_count}" -gt 0 ]] || { echo "No kernel modules were packaged; no usable kernel headers found" >&2; exit 1; }
           CHROOT_SCRIPT
 
           sudo chmod 0755 "${MNT_DIR}/opt/openhd-driver-build/build.sh"
