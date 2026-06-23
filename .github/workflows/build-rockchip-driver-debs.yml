@@ -6,7 +6,7 @@ on:
       targets:
         description: Comma-separated OpenHD-ImageBuilder targets
         required: false
-        default: radxa-rock3a_base,rock5a_base,rock5b_base,radxa-cm3,radxa-zero3w_base,radxa-zero3w-lite_base,core3566
+        default: radxa-rock3a_base,rock5a_base,rock5b_base
   push:
     branches-ignore:
       - stock_2026_driver
@@ -29,7 +29,7 @@ jobs:
       - id: targets
         shell: bash
         run: |
-          targets="${{ github.event.inputs.targets || 'radxa-rock3a_base,rock5a_base,rock5b_base,radxa-cm3,radxa-zero3w_base,radxa-zero3w-lite_base,core3566' }}"
+          targets="${{ github.event.inputs.targets || 'radxa-rock3a_base,rock5a_base,rock5b_base' }}"
           json="$(printf '%s' "$targets" | jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')"
           echo "targets=${json}" >> "$GITHUB_OUTPUT"
 
@@ -177,7 +177,7 @@ jobs:
           fi
 
           sudo mkdir -p "${MNT_DIR}/opt/openhd-driver-build/src" "${MNT_DIR}/opt/openhd-driver-build/out"
-          sudo rsync -a --delete --exclude='.github' --exclude='*.o' --exclude='*.ko' \
+          sudo rsync -a --delete --exclude='.git' --exclude='.github' --exclude='*.o' --exclude='*.ko' \
             --exclude='*.mod' --exclude='*.mod.c' --exclude='Module.symvers' --exclude='modules.order' \
             driver/ "${MNT_DIR}/opt/openhd-driver-build/src/"
           sudo cp /usr/bin/qemu-aarch64-static "${MNT_DIR}/usr/bin/" || true
@@ -208,17 +208,26 @@ jobs:
               -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
           }
 
+          disable_stale_apt_sources() {
+            find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -print0 \
+              | xargs -0 -r sed -i -E \
+                -e '/dl\.cloudsmith\.io\/public\/openhd\/release/s/^/# disabled by driver CI: /' \
+                -e '/bullseye-security/s/^[[:space:]]*deb/# disabled by driver CI: &/' \
+                -e '/bullseye-backports/s/^[[:space:]]*deb/# disabled by driver CI: &/'
+          }
+
           if [[ "${DISTRO}" == "bullseye" ]]; then
             sed -i -E \
               -e 's|https?://deb\.debian\.org/debian|http://archive.debian.org/debian|g' \
-              -e '/bullseye-backports/s/^[[:space:]]*deb/# &/' \
+              -e 's|https?://security\.debian\.org/debian-security|http://archive.debian.org/debian-security|g' \
               /etc/apt/sources.list 2>/dev/null || true
             find /etc/apt/sources.list.d -name '*.list' -print0 2>/dev/null \
               | xargs -0 -r sed -i -E \
                 -e 's|https?://deb\.debian\.org/debian|http://archive.debian.org/debian|g' \
-                -e '/bullseye-backports/s/^[[:space:]]*deb/# &/' || true
+                -e 's|https?://security\.debian\.org/debian-security|http://archive.debian.org/debian-security|g' || true
           fi
 
+          disable_stale_apt_sources
           apt_update_tolerant
           apt-get install -y --no-install-recommends build-essential make gcc bc bison flex kmod dkms ca-certificates
           curl -1sLf "https://dl.cloudsmith.io/public/openhd/dev-release/setup.deb.sh" | bash || true
@@ -229,13 +238,102 @@ jobs:
 
           ensure_headers() {
             local kver="$1"
-            [[ -e "/lib/modules/${kver}/build/Makefile" ]] && return 0
-            apt-get install -y --no-install-recommends "linux-headers-${kver}" || true
+            local build_dir="/lib/modules/${kver}/build"
+            [[ -e "${build_dir}/Makefile" ]] || apt-get install -y --no-install-recommends "linux-headers-${kver}" || true
+            if [[ ! -e "${build_dir}/Makefile" && "${kver}" =~ ^[0-9].*-([A-Za-z0-9._-]+)$ ]]; then
+              local kernel_suffix="${BASH_REMATCH[1]}"
+              for header_pkg in \
+                "linux-headers-current-${kernel_suffix}" \
+                "linux-headers-vendor-${kernel_suffix}" \
+                "linux-headers-legacy-${kernel_suffix}" \
+                "linux-headers-edge-${kernel_suffix}"; do
+                apt-get install -y --no-install-recommends "${header_pkg}" && break || true
+              done
+            fi
             if [[ ! -e "/lib/modules/${kver}/build/Makefile" ]]; then
               header_dir="$(find /usr/src -maxdepth 1 -type d \( -name "linux-headers-${kver}" -o -name "*${kver}*" \) | head -n1 || true)"
               [[ -n "${header_dir}" ]] && ln -sfn "${header_dir}" "/lib/modules/${kver}/build"
             fi
-            [[ -e "/lib/modules/${kver}/build/Makefile" ]]
+            [[ -e "${build_dir}/Makefile" ]] || return 1
+
+            kbuild_tool_is_usable() {
+              local tool="$1"
+              local status=0
+              [[ -x "${tool}" ]] || return 1
+              "${tool}" >/dev/null 2>&1 || status=$?
+              [[ "${status}" -ne 126 && "${status}" -ne 127 ]]
+            }
+
+            if ! kbuild_tool_is_usable "${build_dir}/scripts/basic/fixdep"; then
+              rm -f "${build_dir}/scripts/basic/fixdep"
+              make -C "${build_dir}" scripts/basic/fixdep || make -C "${build_dir}" scripts || true
+              if ! kbuild_tool_is_usable "${build_dir}/scripts/basic/fixdep" && [[ -f "${build_dir}/scripts/basic/fixdep.c" ]]; then
+                gcc -O2 -Wall -Wmissing-prototypes -Wstrict-prototypes \
+                  -o "${build_dir}/scripts/basic/fixdep" "${build_dir}/scripts/basic/fixdep.c"
+              fi
+              if ! kbuild_tool_is_usable "${build_dir}/scripts/basic/fixdep"; then
+                while IFS= read -r fixdep_candidate; do
+                  cp "${fixdep_candidate}" "${build_dir}/scripts/basic/fixdep"
+                  chmod +x "${build_dir}/scripts/basic/fixdep"
+                  kbuild_tool_is_usable "${build_dir}/scripts/basic/fixdep" && break
+                done < <(find /usr/src /lib/modules -path '*/scripts/basic/fixdep' -type f -executable 2>/dev/null)
+              fi
+              [[ -f "${build_dir}/scripts/basic/fixdep" ]] && chmod +x "${build_dir}/scripts/basic/fixdep"
+            fi
+            kbuild_tool_is_usable "${build_dir}/scripts/basic/fixdep"
+
+            if [[ ! -f "${build_dir}/include/generated/autoconf.h" || ! -f "${build_dir}/include/config/auto.conf" || ! -f "${build_dir}/include/config/auto.conf.cmd" ]]; then
+              if [[ ! -f "${build_dir}/.config" && -f "/boot/config-${kver}" ]]; then
+                cp "/boot/config-${kver}" "${build_dir}/.config"
+              fi
+              [[ -f "${build_dir}/.config" ]] || return 1
+              mkdir -p "${build_dir}/include/generated" "${build_dir}/include/config"
+              awk '
+                /^CONFIG_[A-Za-z0-9_]+=y$/ {
+                  name=$1
+                  sub(/=y$/, "", name)
+                  print "#define " name " 1"
+                  next
+                }
+                /^CONFIG_[A-Za-z0-9_]+=m$/ {
+                  name=$1
+                  sub(/=m$/, "", name)
+                  print "#define " name "_MODULE 1"
+                  next
+                }
+                /^CONFIG_[A-Za-z0-9_]+=/ {
+                  split($0, parts, "=")
+                  print "#define " parts[1] " " parts[2]
+                }
+              ' "${build_dir}/.config" > "${build_dir}/include/generated/autoconf.h"
+              cp "${build_dir}/.config" "${build_dir}/include/config/auto.conf"
+              printf '%s\n' \
+                '# Automatically generated by OpenHD driver CI for incomplete vendor headers.' \
+                'deps_config := \' \
+                '  .config' \
+                '' \
+                'include/config/auto.conf: $(deps_config)' \
+                '' \
+                '$(deps_config):' \
+                > "${build_dir}/include/config/auto.conf.cmd"
+              touch -r "${build_dir}/include/config/auto.conf" "${build_dir}/include/generated/autoconf.h" "${build_dir}/include/config/auto.conf.cmd"
+            fi
+
+            [[ -f "${build_dir}/include/generated/autoconf.h" && -f "${build_dir}/include/config/auto.conf" && -f "${build_dir}/include/config/auto.conf.cmd" ]]
+
+            if ! kbuild_tool_is_usable "${build_dir}/scripts/mod/modpost"; then
+              rm -f "${build_dir}/scripts/mod/modpost"
+              make -C "${build_dir}" ARCH=arm64 scripts/mod/modpost || make -C "${build_dir}" ARCH=arm64 scripts || true
+              if ! kbuild_tool_is_usable "${build_dir}/scripts/mod/modpost"; then
+                while IFS= read -r modpost_candidate; do
+                  cp "${modpost_candidate}" "${build_dir}/scripts/mod/modpost"
+                  chmod +x "${build_dir}/scripts/mod/modpost"
+                  kbuild_tool_is_usable "${build_dir}/scripts/mod/modpost" && break
+                done < <(find /usr/src /lib/modules -path '*/scripts/mod/modpost' -type f -executable 2>/dev/null)
+              fi
+              [[ -f "${build_dir}/scripts/mod/modpost" ]] && chmod +x "${build_dir}/scripts/mod/modpost"
+            fi
+            kbuild_tool_is_usable "${build_dir}/scripts/mod/modpost"
           }
 
           package_driver() {
@@ -268,19 +366,40 @@ jobs:
             dpkg-deb --build "${pkg_dir}" "${OUT_DIR}/${package_name}_${VERSION}_arm64.deb"
           }
 
+          supported_warning_flags() {
+            local flags=()
+            local flag
+            for flag in \
+              -Wno-error=implicit-fallthrough \
+              -Wno-error=stringop-overread \
+              -Wno-error=misleading-indentation; do
+              if printf 'int main(void) { return 0; }\n' | gcc -Werror "${flag}" -x c -c - -o /tmp/openhd-cc-flag-test.o >/dev/null 2>&1; then
+                flags+=("${flag}")
+              fi
+            done
+            rm -f /tmp/openhd-cc-flag-test.o
+            printf '%s ' "${flags[@]}"
+          }
+
           mapfile -t kernels < <(find /lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           [[ "${#kernels[@]}" -gt 0 ]]
+          built_count=0
+          warning_flags="$(supported_warning_flags)"
           for kver in "${kernels[@]}"; do
-            ensure_headers "${kver}"
+            if ! ensure_headers "${kver}"; then
+              echo "::warning::Skipping ${kver}; kernel headers are unavailable"
+              continue
+            fi
             make -C "${SRC_DIR}" clean || true
-            warning_flags="-Wno-error=implicit-fallthrough -Wno-error=stringop-overread -Wno-error=misleading-indentation"
             make_args=(-C "${SRC_DIR}" -j"$(nproc)" ARCH=arm64 KVER="${kver}" KSRC="/lib/modules/${kver}/build" KCFLAGS="${warning_flags}" USER_EXTRA_CFLAGS="${warning_flags}")
             [[ -n "${USER_MODULE_NAME_VALUE}" ]] && make_args+=(USER_MODULE_NAME="${USER_MODULE_NAME_VALUE}")
             make "${make_args[@]}" modules
             ko="${SRC_DIR}/${MODULE_NAME}.ko"
             [[ -f "${ko}" ]] || ko="$(find "${SRC_DIR}" -maxdepth 1 -name '*.ko' | head -n1)"
             package_driver "${kver}" "${ko}"
+            built_count=$((built_count + 1))
           done
+          [[ "${built_count}" -gt 0 ]] || { echo "No kernel modules were packaged; no usable kernel headers found" >&2; exit 1; }
           CHROOT_SCRIPT
 
           sudo chmod 0755 "${MNT_DIR}/opt/openhd-driver-build/build.sh"
