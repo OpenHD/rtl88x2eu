@@ -6,7 +6,7 @@ on:
       targets:
         description: Comma-separated OpenHD-ImageBuilder targets
         required: false
-        default: radxa-rock3a_base,rock5a_base,rock5b_base
+        default: radxa-rock3a_base,rock5a_base,rock5b_base,radxa-cm5_base
   push:
     paths:
       - ".github/workflows/build-rockchip-driver-debs.yml"
