@@ -25,7 +25,7 @@ jobs:
       - id: targets
         shell: bash
         run: |
-          targets="${{ github.event.inputs.targets || 'radxa-rock3a_base,rock5a_base,rock5b_base' }}"
+          targets="${{ github.event.inputs.targets || 'radxa-rock3a_base,rock5a_base,rock5b_base,radxa-cm5_base' }}"
           json="$(printf '%s' "$targets" | jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')"
           echo "targets=${json}" >> "$GITHUB_OUTPUT"
 
@@ -241,6 +241,9 @@ jobs:
               ;;
             radxa-rock3a|radxa-rock3a_base)
               apt-get install -y --allow-downgrades --no-install-recommends linux-headers-rock-3a || true
+              ;;
+            radxa-cm5|radxa-cm5_base)
+              apt-get install -y --allow-downgrades --no-install-recommends linux-headers-radxa-cm5-rpi-cm4-io || true
               ;;
           esac
 
