@@ -19,6 +19,7 @@
 #include <chrono>
 #include <cctype>
 #include <cerrno>
+#include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -47,6 +48,7 @@ constexpr std::array<unsigned char, 3> kRealtekOui{{0x00, 0xE0, 0x4C}};
 using Mac = std::array<unsigned char, 6>;
 using CommandHook = std::function<std::string(const std::string &, const std::string &)>;
 CommandHook command_hook;
+volatile std::sig_atomic_t stop_requested = 0;
 
 struct Options {
     std::string interface = "wlan1";
@@ -57,6 +59,10 @@ struct Options {
     bool assume_yes = false;
     bool no_reload = false;
     bool self_test = false;
+    bool rf_test = false;
+    unsigned bandwidth_mhz = 0;
+    unsigned duration_seconds = 10;
+    bool duration_set = false;
 };
 
 struct CommandResult {
@@ -167,6 +173,64 @@ CommandResult run_command(const std::vector<std::string> &arguments) {
     else if (WIFSIGNALED(wait_status))
         status = 128 + WTERMSIG(wait_status);
     return {status, trim(output)};
+}
+
+std::optional<unsigned> whiptail_bandwidth_menu() {
+    if (!isatty(STDIN_FILENO) || access("/usr/bin/whiptail", X_OK) != 0)
+        return std::nullopt;
+    int pipe_fds[2];
+    if (pipe(pipe_fds) != 0)
+        return std::nullopt;
+    const pid_t child = fork();
+    if (child < 0) {
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+        return std::nullopt;
+    }
+    if (child == 0) {
+        close(pipe_fds[0]);
+        // whiptail draws on stdout and returns its selected tag on stderr.
+        dup2(STDERR_FILENO, STDOUT_FILENO);
+        dup2(pipe_fds[1], STDERR_FILENO);
+        close(pipe_fds[1]);
+        execl("/usr/bin/whiptail", "whiptail", "--title", "OpenHD RF test",
+              "--menu", "Select bandwidth (primary frequency 5180 MHz)",
+              "15", "64", "2", "20", "20 MHz", "40", "40 MHz", nullptr);
+        _exit(127);
+    }
+    close(pipe_fds[1]);
+    std::string selection;
+    std::array<char, 64> buffer {};
+    ssize_t count;
+    while ((count = read(pipe_fds[0], buffer.data(), buffer.size())) > 0)
+        selection.append(buffer.data(), static_cast<std::size_t>(count));
+    close(pipe_fds[0]);
+    int status = 0;
+    while (waitpid(child, &status, 0) < 0 && errno == EINTR) {
+    }
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        fail("RF test bandwidth selection cancelled");
+    selection = trim(selection);
+    if (selection == "20" || selection == "40")
+        return static_cast<unsigned>(std::stoul(selection));
+    fail("invalid bandwidth returned by whiptail: " + selection);
+}
+
+unsigned select_bandwidth() {
+    if (const auto selected = whiptail_bandwidth_menu())
+        return *selected;
+    std::cout << "Select RF test bandwidth:\n"
+                 "  1) 20 MHz (center 5180 MHz)\n"
+                 "  2) 40 MHz (primary 5180 MHz, center 5190 MHz)\n"
+                 "Selection [1/2]: "
+              << std::flush;
+    std::string answer;
+    std::getline(std::cin, answer);
+    if (answer == "1" || answer == "20")
+        return 20;
+    if (answer == "2" || answer == "40")
+        return 40;
+    fail("bandwidth selection must be 20 or 40 MHz");
 }
 
 std::string real_driver_command(const std::string &interface, const std::string &command) {
@@ -455,6 +519,70 @@ ProvisionResult provision(const std::string &interface, const std::string &map_p
     return {selected_mac, true};
 }
 
+void check_mp_response(const std::string &command, const std::string &response) {
+    const std::string normalized = lower(compact(response));
+    if (normalized.find("error") != std::string::npos ||
+        normalized.find("fail") != std::string::npos ||
+        normalized.find("invalid") != std::string::npos)
+        fail(command + " failed: " + response);
+}
+
+void stop_signal_handler(int) {
+    stop_requested = 1;
+}
+
+void transmit_rf_test_signal(const std::string &interface, unsigned bandwidth_mhz,
+                             unsigned duration_seconds) {
+    if (bandwidth_mhz != 20 && bandwidth_mhz != 40)
+        fail("RF test bandwidth must be 20 or 40 MHz");
+    stop_requested = 0;
+    const auto old_int = std::signal(SIGINT, stop_signal_handler);
+    const auto old_term = std::signal(SIGTERM, stop_signal_handler);
+    std::string response = driver_command(interface, "mp_start");
+    if (lower(compact(response)).find("mp_startok") == std::string::npos)
+        fail("MP mode did not start: " + response);
+
+    // Channel 36 has primary frequency 5180 MHz. With 40 MHz bandwidth the
+    // secondary channel is above it and the bonded-channel center is 5190 MHz.
+    const unsigned bandwidth_code = bandwidth_mhz == 40 ? 1 : 0;
+    const unsigned channel_offset = bandwidth_mhz == 40 ? 1 : 0;
+    const std::vector<std::string> configuration {
+        "mp_ctx stop",
+        "mp_rate HTMCS7",
+        "mp_ant_tx ab",
+        "mp_channel 36",
+        "mp_ch_offset " + std::to_string(channel_offset),
+        "mp_bandwidth 40M=" + std::to_string(bandwidth_code) + ",shortGI=0",
+        "mp_channel 36",
+        "mp_bandwidth 40M=" + std::to_string(bandwidth_code) + ",shortGI=0",
+        "mp_txpower patha=63,pathb=63",
+    };
+    for (const auto &command : configuration) {
+        response = driver_command(interface, command);
+        check_mp_response(command, response);
+    }
+
+    std::cout << "Starting maximum-index single-tone RF test:\n"
+              << "  primary frequency: 5180 MHz (channel 36)\n"
+              << "  bandwidth: " << bandwidth_mhz << " MHz\n"
+              << "  power index: 63 on paths A and B\n"
+              << "  duration: " << duration_seconds << " seconds\n";
+    response = driver_command(interface, "mp_ctx background,stone");
+    check_mp_response("mp_ctx background,stone", response);
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(duration_seconds);
+    while (!stop_requested && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    response = driver_command(interface, "mp_ctx stop");
+    check_mp_response("mp_ctx stop", response);
+    response = driver_command(interface, "mp_stop");
+    check_mp_response("mp_stop", response);
+    std::signal(SIGINT, old_int);
+    std::signal(SIGTERM, old_term);
+    std::cout << "RF test stopped.\n";
+}
+
 void reserve_registry_mac(int registry_fd, const Mac &mac) {
     std::ostringstream record;
     record << format_mac(mac) << ' ' << std::time(nullptr) << " reserved\n";
@@ -466,11 +594,15 @@ void reserve_registry_mac(int registry_fd, const Mac &mac) {
 }
 
 void print_help() {
-    std::cout << "Usage: openhd-efuse-flash [interface] [--mac MAC] [--yes] [--no-reload]\n\n"
+    std::cout << "Usage: openhd-efuse-flash [interface] [--mac MAC] [--yes] [--no-reload]\n"
+                 "       openhd-efuse-flash [interface] --rf-test [--bandwidth 20|40]\n\n"
                  "Flash an OpenHD RTL8812EU/RTL8822EU card with a unique persistent MAC.\n\n"
                  "  --mac MAC    use a centrally allocated globally-administered MAC\n"
                  "  --yes        skip the irreversible-write prompt\n"
-                 "  --no-reload  require the driver to already be in MP mode\n";
+                 "  --no-reload  require the driver to already be in MP mode\n"
+                 "  --rf-test    send a time-bounded maximum-index single-tone test signal\n"
+                 "  --bandwidth  select 20 or 40 MHz; otherwise show an interactive menu\n"
+                 "  --duration   RF test duration in seconds (default 10, maximum 300)\n";
 }
 
 Options parse_options(int argc, char **argv) {
@@ -487,8 +619,11 @@ Options parse_options(int argc, char **argv) {
             options.no_reload = true;
         } else if (argument == "--self-test") {
             options.self_test = true;
+        } else if (argument == "--rf-test") {
+            options.rf_test = true;
         } else if (argument == "--mac" || argument == "--map" || argument == "--mask" ||
-                   argument == "--registry") {
+                   argument == "--registry" || argument == "--bandwidth" ||
+                   argument == "--duration") {
             if (++index >= argc)
                 fail(argument + " requires a value");
             const std::string value = argv[index];
@@ -498,6 +633,12 @@ Options parse_options(int argc, char **argv) {
                 options.map_path = value;
             else if (argument == "--mask")
                 options.mask_path = value;
+            else if (argument == "--bandwidth")
+                options.bandwidth_mhz = static_cast<unsigned>(std::stoul(value));
+            else if (argument == "--duration") {
+                options.duration_seconds = static_cast<unsigned>(std::stoul(value));
+                options.duration_set = true;
+            }
             else
                 options.registry_path = value;
         } else if (!argument.empty() && argument.front() == '-') {
@@ -509,6 +650,14 @@ Options parse_options(int argc, char **argv) {
             fail("unexpected argument: " + argument);
         }
     }
+    if (options.bandwidth_mhz != 0 && options.bandwidth_mhz != 20 && options.bandwidth_mhz != 40)
+        fail("--bandwidth must be 20 or 40");
+    if (options.duration_seconds == 0 || options.duration_seconds > 300)
+        fail("--duration must be between 1 and 300 seconds");
+    if (!options.rf_test && (options.bandwidth_mhz != 0 || options.duration_set))
+        fail("--bandwidth and --duration require --rf-test");
+    if (options.rf_test && options.requested_mac)
+        fail("--mac cannot be combined with --rf-test");
     return options;
 }
 
@@ -539,6 +688,8 @@ int self_test() {
             return std::string("0x00 0xE0 0x4C 0x12 0x34 0x56");
         if (command == "efuse_set wlfk2map")
             return std::string("WiFi write map compare OK");
+        if (command.rfind("mp_", 0) == 0)
+            return std::string("OK");
         fail("unexpected self-test command: " + command);
     };
     bool reserved = false;
@@ -548,11 +699,25 @@ int self_test() {
         reserved = true;
         events.emplace_back("RESERVED");
     });
-    command_hook = {};
     const auto reservation = std::find(events.begin(), events.end(), "RESERVED");
     const auto write_command = std::find(events.begin(), events.end(), "efuse_set wlfk2map");
     if (!result.wrote || result.mac != mac || !reserved || reservation >= write_command)
         fail("blank-card flow self-test failed");
+    for (const unsigned bandwidth : {20U, 40U}) {
+        events.clear();
+        transmit_rf_test_signal("wlan1", bandwidth, 0);
+        const std::string bandwidth_command =
+            "mp_bandwidth 40M=" + std::to_string(bandwidth == 40 ? 1 : 0) + ",shortGI=0";
+        const std::string offset_command = "mp_ch_offset " + std::to_string(bandwidth == 40 ? 1 : 0);
+        if (std::find(events.begin(), events.end(), "mp_channel 36") == events.end() ||
+            std::find(events.begin(), events.end(), bandwidth_command) == events.end() ||
+            std::find(events.begin(), events.end(), offset_command) == events.end() ||
+            std::find(events.begin(), events.end(), "mp_txpower patha=63,pathb=63") == events.end() ||
+            std::find(events.begin(), events.end(), "mp_ctx background,stone") == events.end() ||
+            events.empty() || events.back() != "mp_stop")
+            fail(std::to_string(bandwidth) + " MHz RF test command self-test failed");
+    }
+    command_hook = {};
     std::cout << "Self-test passed.\n";
     return 0;
 }
@@ -562,6 +727,66 @@ int run(const Options &options) {
         return self_test();
     if (geteuid() != 0)
         fail("run this tool as root");
+
+    if (options.rf_test) {
+        const unsigned bandwidth = options.bandwidth_mhz ? options.bandwidth_mhz : select_bandwidth();
+        if (!options.assume_yes) {
+            std::cout << "WARNING: This transmits a maximum-index continuous RF single tone.\n"
+                         "Use only in a shielded test setup where this transmission is permitted.\n"
+                         "Type RF-TEST to continue: "
+                      << std::flush;
+            std::string answer;
+            std::getline(std::cin, answer);
+            if (answer != "RF-TEST")
+                fail("RF test cancelled");
+        }
+
+        create_directories(parent_path(options.registry_path), 0700);
+        const int lock_fd = open(options.registry_path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+        if (lock_fd < 0 || flock(lock_fd, LOCK_EX) != 0)
+            fail("cannot acquire the provisioning/RF-test lock");
+        std::string interface = options.interface;
+        const bool restore_normal = !options.no_reload;
+        bool normal_mode_restored = false;
+        try {
+            if (!options.no_reload && !module_mp_enabled()) {
+                std::cout << "Reloading " << kModule << " in MP mode...\n";
+                interface = reload_module(interface, true);
+            } else if (!file_exists("/sys/class/net/" + interface)) {
+                interface = wait_for_interface(interface, 2);
+            }
+            try {
+                transmit_rf_test_signal(interface, bandwidth, options.duration_seconds);
+            } catch (...) {
+                try {
+                    driver_command(interface, "mp_ctx stop");
+                    driver_command(interface, "mp_stop");
+                } catch (const std::exception &error) {
+                    std::cerr << "warning: RF stop cleanup failed: " << error.what() << '\n';
+                }
+                throw;
+            }
+            if (restore_normal) {
+                std::cout << "Reloading " << kModule << " in normal mode...\n";
+                interface = reload_module(interface, false);
+                normal_mode_restored = true;
+            }
+        } catch (...) {
+            if (restore_normal && !normal_mode_restored) {
+                try {
+                    interface = reload_module(interface, false);
+                } catch (const std::exception &error) {
+                    std::cerr << "warning: failed to restore normal driver mode: " << error.what() << '\n';
+                }
+            }
+            close(lock_fd);
+            throw;
+        }
+        close(lock_fd);
+        std::cout << "RF test complete on " << interface << ".\n";
+        return 0;
+    }
+
     ensure_private_file(options.map_path);
     ensure_private_file(options.mask_path);
     if (options.requested_mac && !driver_accepts_mac(*options.requested_mac))
