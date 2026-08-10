@@ -43,7 +43,9 @@ constexpr const char *kDefaultMask = "/etc/wifi/wifi_efuse_88x2eu_ohd.mask";
 constexpr const char *kDefaultRegistry = "/var/lib/openhd-efuse/mac-addresses";
 constexpr std::size_t kIoctlBufferSize = 2047;
 constexpr unsigned kMacOffset = 0x157;
+constexpr unsigned kUsbSerialOffset = 0x176;
 constexpr std::array<unsigned char, 3> kRealtekOui{{0x00, 0xE0, 0x4C}};
+constexpr std::array<unsigned char, 6> kUsbSerial{{'6', '7', '3', '6', '4', '3'}};
 
 using Mac = std::array<unsigned char, 6>;
 using CommandHook = std::function<std::string(const std::string &, const std::string &)>;
@@ -444,6 +446,17 @@ Mac read_hardware_mac(const std::string &interface) {
     return mac;
 }
 
+std::array<unsigned char, 6> read_hardware_serial(const std::string &interface) {
+    std::ostringstream command;
+    command << "efuse_get rmap," << std::uppercase << std::hex << kUsbSerialOffset << ",6";
+    const auto bytes = parse_hex_bytes(driver_command(interface, command.str()));
+    if (bytes.size() != kUsbSerial.size())
+        fail("driver returned an invalid USB serial readback");
+    std::array<unsigned char, 6> serial {};
+    std::copy(bytes.begin(), bytes.end(), serial.begin());
+    return serial;
+}
+
 unsigned available_raw_bytes(const std::string &interface) {
     const std::string response = compact(driver_command(interface, "efuse_get ableraw"));
     const auto equals = response.find('=');
@@ -484,6 +497,7 @@ ProvisionResult provision(const std::string &interface, const std::string &map_p
         {"efuse_file " + map_path, "efusefilefile_readok"},
         {"efuse_mask " + mask_path, "efusemaskfilereadok"},
         {"efuse_set wlwfake,157," + format_mac(selected_mac, false), "wlwfakeok"},
+        {"efuse_set wlwfake,176,363733363433", "wlwfakeok"},
     };
     for (const auto &item : staging) {
         response = driver_command(interface, item.first);
@@ -496,10 +510,15 @@ ProvisionResult provision(const std::string &interface, const std::string &map_p
     const auto fake_bytes = parse_hex_bytes(driver_command(interface, fake_command.str()));
     if (fake_bytes.size() != 6 || !std::equal(fake_bytes.begin(), fake_bytes.end(), selected_mac.begin()))
         fail("fake-map MAC verification failed");
+    const auto fake_serial = parse_hex_bytes(driver_command(interface, "efuse_get wlrfkrmap,176,6"));
+    if (fake_serial.size() != kUsbSerial.size() ||
+        !std::equal(fake_serial.begin(), fake_serial.end(), kUsbSerial.begin()))
+        fail("fake-map USB serial verification failed");
 
     std::cout << "Interface: " << interface << '\n'
               << "Available raw eFuse capacity: " << available << " bytes\n"
-              << "MAC to program: " << format_mac(selected_mac) << '\n';
+              << "MAC to program: " << format_mac(selected_mac) << '\n'
+              << "USB serial to program: 673643\n";
     if (!assume_yes) {
         std::cout << "This write is irreversible. Type FLASH to continue: " << std::flush;
         std::string answer;
@@ -515,6 +534,8 @@ ProvisionResult provision(const std::string &interface, const std::string &map_p
     const Mac readback = read_hardware_mac(interface);
     if (readback != selected_mac)
         fail("hardware MAC readback failed: read " + format_mac(readback));
+    if (read_hardware_serial(interface) != kUsbSerial)
+        fail("hardware USB serial readback failed");
     std::cout << "eFuse write and hardware readback succeeded.\n";
     return {selected_mac, true};
 }
@@ -671,11 +692,13 @@ int self_test() {
         events.push_back(command);
         if (command == "mp_start")
             return std::string("m p _ s t a r t  o k");
-        if (command.rfind("efuse_get rmap", 0) == 0) {
+        if (command.rfind("efuse_get rmap,157", 0) == 0) {
             ++rmap_reads;
             return rmap_reads == 1 ? std::string("0xFF 0xFF 0xFF 0xFF 0xFF 0xFF")
                                    : std::string("0x00 0xE0 0x4C 0x12 0x34 0x56");
         }
+        if (command.rfind("efuse_get rmap,176", 0) == 0)
+            return std::string("0x36 0x37 0x33 0x36 0x34 0x33");
         if (command == "efuse_get ableraw")
             return std::string("[ available raw size ] = 1 0 9 0 bytes");
         if (command.rfind("efuse_file ", 0) == 0)
@@ -684,8 +707,10 @@ int self_test() {
             return std::string("efuse mask file read OK");
         if (command.rfind("efuse_set wlwfake", 0) == 0)
             return std::string("wlwfake OK");
-        if (command.rfind("efuse_get wlrfkrmap", 0) == 0)
+        if (command.rfind("efuse_get wlrfkrmap,157", 0) == 0)
             return std::string("0x00 0xE0 0x4C 0x12 0x34 0x56");
+        if (command.rfind("efuse_get wlrfkrmap,176", 0) == 0)
+            return std::string("0x36 0x37 0x33 0x36 0x34 0x33");
         if (command == "efuse_set wlfk2map")
             return std::string("WiFi write map compare OK");
         if (command.rfind("mp_", 0) == 0)
@@ -701,7 +726,12 @@ int self_test() {
     });
     const auto reservation = std::find(events.begin(), events.end(), "RESERVED");
     const auto write_command = std::find(events.begin(), events.end(), "efuse_set wlfk2map");
-    if (!result.wrote || result.mac != mac || !reserved || reservation >= write_command)
+    const auto serial_stage = std::find(events.begin(), events.end(),
+                                        "efuse_set wlwfake,176,363733363433");
+    const auto serial_readback = std::find(events.begin(), events.end(), "efuse_get rmap,176,6");
+    if (!result.wrote || result.mac != mac || !reserved || reservation >= write_command ||
+        serial_stage == events.end() || serial_readback == events.end() ||
+        serial_readback <= write_command)
         fail("blank-card flow self-test failed");
     for (const unsigned bandwidth : {20U, 40U}) {
         events.clear();

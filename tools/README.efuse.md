@@ -32,6 +32,32 @@ and flashing fixture under trusted control.
 
 Do not interrupt power during the irreversible write.
 
+## Debian package
+
+Build a package for the current Debian architecture with:
+
+```sh
+make openhd-efuse-deb
+```
+
+Install the resulting package from `dist/`, then provision one connected card:
+
+```sh
+sudo apt install ./openhd-efuse-flasher_1.0.1_armhf.deb
+sudo openhd-efuse-flash
+```
+
+Without `--mac`, the utility generates a random address in the `00:E0:4C`
+range and rejects addresses already recorded on that host. The package stores
+the map and mask as root-only configuration files. Anyone who can obtain and
+extract the package can still recover those files; client-side packaging
+cannot make a locally used provisioning map secret.
+
+Newly provisioned cards receive the fixed USB serial string `673643`. The
+utility verifies both the generated MAC and this serial directly from hardware
+after the write. Cards that already have a valid permanent MAC are left
+unchanged.
+
 ## RF test mode
 
 Run the separate, time-bounded RF single-tone test with:

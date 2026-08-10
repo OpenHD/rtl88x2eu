@@ -1164,6 +1164,9 @@ EFUSE_TOOL_INSTALL_DIR ?= /usr/local/sbin
 EFUSE_TOOL_SRC ?= tools/openhd_efuse_flash.cpp
 EFUSE_TOOL_BIN ?= tools/openhd-efuse-flash
 EFUSE_TOOL_CXX ?= $(CROSS_COMPILE)g++
+EFUSE_DEB_VERSION ?= 1.0.1
+EFUSE_DEB_ARCH ?= $(shell dpkg --print-architecture 2>/dev/null)
+EFUSE_DEB_OUTPUT_DIR ?= dist
 
 #WIFIMAC_PATH
 USER_WIFIMAC_PATH ?=
@@ -2636,6 +2639,16 @@ strip:
 openhd-efuse-tool:
 	$(EFUSE_TOOL_CXX) -std=c++17 -O2 -Wall -Wextra -Wpedantic \
 		-o "$(EFUSE_TOOL_BIN)" "$(EFUSE_TOOL_SRC)"
+
+.PHONY: openhd-efuse-deb
+openhd-efuse-deb: openhd-efuse-tool
+	packaging/build-efuse-deb.sh \
+		--binary "$(EFUSE_TOOL_BIN)" \
+		--map "$(EFUSE_MAP_SRC)" \
+		--mask "$(EFUSE_MASK_SRC)" \
+		--version "$(EFUSE_DEB_VERSION)" \
+		--architecture "$(EFUSE_DEB_ARCH)" \
+		--output-dir "$(EFUSE_DEB_OUTPUT_DIR)"
 
 install: openhd-efuse-tool
 	install -p -m 644 $(MODULE_NAME).ko  $(MODDESTDIR)
