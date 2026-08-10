@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+"""Provision an OpenHD RTL8812EU/RTL8822EU Wi-Fi eFuse safely."""
+
+import argparse
+import ctypes
+import fcntl
+import os
+import re
+import secrets
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+
+MODULE = "88x2eu_ohd"
+SIOCDEVPRIVATE = 0x89F0
+IFNAMSIZ = 16
+IOCTL_BUFFER_SIZE = 2047
+DEFAULT_MAP = Path("/etc/wifi/wifi_efuse_88x2eu_ohd.map")
+DEFAULT_MASK = Path("/etc/wifi/wifi_efuse_88x2eu_ohd.mask")
+DEFAULT_REGISTRY = Path("/var/lib/openhd-efuse/mac-addresses")
+MAC_OFFSET = 0x157
+REALTEK_OUI = bytes((0x00, 0xE0, 0x4C))
+
+
+class IwPoint(ctypes.Structure):
+    _fields_ = [
+        ("pointer", ctypes.c_void_p),
+        ("length", ctypes.c_ushort),
+        ("flags", ctypes.c_ushort),
+    ]
+
+
+class IwreqData(ctypes.Union):
+    _fields_ = [("data", IwPoint), ("padding", ctypes.c_ubyte * 16)]
+
+
+class Ifreq(ctypes.Structure):
+    _fields_ = [("name", ctypes.c_char * IFNAMSIZ), ("data", ctypes.c_void_p)]
+
+
+LIBC = ctypes.CDLL(None, use_errno=True)
+
+
+def fatal(message):
+    print(f"error: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def run(argv, check=True, capture=False):
+    return subprocess.run(
+        argv,
+        check=check,
+        text=True,
+        stdout=subprocess.PIPE if capture else None,
+        stderr=subprocess.STDOUT if capture else None,
+    )
+
+
+def ioctl_command(interface, command):
+    encoded = command.encode("ascii")
+    if len(encoded) >= IOCTL_BUFFER_SIZE:
+        fatal(f"driver command is too long: {command[:40]}")
+
+    buffer = ctypes.create_string_buffer(IOCTL_BUFFER_SIZE + 1)
+    buffer.value = encoded
+    request_data = IwreqData()
+    request_data.data.pointer = ctypes.addressof(buffer)
+    request_data.data.length = IOCTL_BUFFER_SIZE
+    request = Ifreq()
+    request.name = interface.encode("ascii")[: IFNAMSIZ - 1]
+    request.data = ctypes.addressof(request_data)
+
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        result = LIBC.ioctl(sock.fileno(), SIOCDEVPRIVATE, ctypes.byref(request))
+    if result < 0:
+        error_number = ctypes.get_errno()
+        raise OSError(error_number, os.strerror(error_number), command)
+
+    length = min(request_data.data.length, IOCTL_BUFFER_SIZE)
+    return buffer.raw[:length].split(b"\0", 1)[0].decode("ascii", "replace").strip()
+
+
+def compact(response):
+    return re.sub(r"\s+", "", response)
+
+
+def parse_hex_bytes(response):
+    values = re.findall(r"0\s*x\s*([0-9A-Fa-f]\s*[0-9A-Fa-f])", response)
+    return bytes(int(re.sub(r"\s", "", value), 16) for value in values)
+
+
+def parse_mac(value):
+    compact_value = value.replace(":", "").replace("-", "")
+    if not re.fullmatch(r"[0-9A-Fa-f]{12}", compact_value):
+        fatal(f"invalid MAC address: {value}")
+    return bytes.fromhex(compact_value)
+
+
+def format_mac(value):
+    return ":".join(f"{byte:02X}" for byte in value)
+
+
+def driver_accepts_mac(value):
+    return (
+        len(value) == 6
+        and value != b"\x00" * 6
+        and value != b"\xff" * 6
+        and not (value[0] & 0x01)
+        and not (value[0] & 0x02)
+    )
+
+
+def module_mp_enabled():
+    parameter = Path(f"/sys/module/{MODULE}/parameters/rtw_mp_mode")
+    try:
+        return parameter.read_text(encoding="ascii").strip() not in ("0", "N", "n")
+    except FileNotFoundError:
+        return False
+
+
+def driver_interfaces():
+    matches = []
+    for interface_path in Path("/sys/class/net").iterdir():
+        module_link = interface_path / "device" / "driver" / "module"
+        try:
+            if module_link.resolve().name == MODULE:
+                matches.append(interface_path.name)
+        except FileNotFoundError:
+            continue
+    return sorted(matches)
+
+
+def wait_for_interface(preferred, timeout=10):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        matches = driver_interfaces()
+        if preferred in matches:
+            return preferred
+        if len(matches) == 1:
+            return matches[0]
+        time.sleep(0.25)
+    fatal(f"no {MODULE} network interface appeared after module reload")
+
+
+def reload_module(interface, mp_mode):
+    if interface and Path(f"/sys/class/net/{interface}").exists():
+        run(["ip", "link", "set", interface, "down"], check=False)
+    result = run(["modprobe", "-r", MODULE], check=False, capture=True)
+    if result.returncode:
+        fatal(f"cannot unload {MODULE}: {result.stdout.strip()}")
+    arguments = ["modprobe", MODULE]
+    if mp_mode:
+        arguments.append("rtw_mp_mode=1")
+    result = run(arguments, check=False, capture=True)
+    if result.returncode:
+        fatal(f"cannot load {MODULE}: {result.stdout.strip()}")
+    interface = wait_for_interface(interface)
+    result = run(["ip", "link", "set", interface, "up"], check=False, capture=True)
+    if result.returncode:
+        fatal(f"cannot bring {interface} up after module reload: {result.stdout.strip()}")
+    return interface
+
+
+def ensure_private_file(path):
+    try:
+        mode = path.stat().st_mode & 0o777
+    except FileNotFoundError:
+        fatal(f"required provisioning data is missing: {path}")
+    if mode & 0o077:
+        fatal(f"{path} must not be accessible by group or other users (current mode {mode:04o})")
+
+
+def registry_addresses(file_object):
+    file_object.seek(0)
+    addresses = set()
+    for line in file_object:
+        match = re.match(r"\s*([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})\b", line)
+        if match:
+            addresses.add(bytes.fromhex(match.group(1).replace(":", "")))
+    return addresses
+
+
+def allocate_mac(used):
+    for _ in range(1024):
+        candidate = REALTEK_OUI + secrets.token_bytes(3)
+        if candidate not in used:
+            return candidate
+    fatal("could not allocate an unused MAC address")
+
+
+def read_hardware_mac(interface):
+    response = ioctl_command(interface, f"efuse_get rmap,{MAC_OFFSET:X},6")
+    value = parse_hex_bytes(response)
+    if len(value) != 6:
+        fatal(f"driver returned an invalid MAC readback: {response}")
+    return value
+
+
+def available_raw_bytes(interface):
+    response = ioctl_command(interface, "efuse_get ableraw")
+    match = re.search(r"=\s*((?:\d\s*)+)", response)
+    if not match:
+        fatal(f"cannot parse available eFuse capacity: {response}")
+    return int(re.sub(r"\s", "", match.group(1)))
+
+
+def provision(interface, map_path, mask_path, selected_mac, assume_yes, reserve_mac):
+    response = ioctl_command(interface, "mp_start")
+    if "mp_startok" not in compact(response).lower():
+        fatal(f"MP mode did not start: {response}")
+
+    current_mac = read_hardware_mac(interface)
+    if driver_accepts_mac(current_mac):
+        print(f"Card is already provisioned with permanent MAC {format_mac(current_mac)}; nothing written.")
+        return current_mac, False
+
+    available = available_raw_bytes(interface)
+    if available < 256:
+        fatal(f"only {available} raw eFuse bytes remain; refusing to program")
+
+    for command, expected in (
+        (f"efuse_file {map_path}", "efusefilefile_readOK"),
+        (f"efuse_mask {mask_path}", "efusemaskfilereadOK"),
+        (f"efuse_set wlwfake,{MAC_OFFSET:X},{selected_mac.hex().upper()}", "wlwfakeOK"),
+    ):
+        response = ioctl_command(interface, command)
+        if expected.lower() not in compact(response).lower():
+            fatal(f"staging failed for {command.split()[0]}: {response}")
+
+    fake_response = ioctl_command(interface, f"efuse_get wlrfkrmap,{MAC_OFFSET:X},6")
+    fake_mac = parse_hex_bytes(fake_response)
+    if fake_mac != selected_mac:
+        fatal(f"fake-map MAC verification failed: read {format_mac(fake_mac)}")
+
+    print(f"Interface: {interface}")
+    print(f"Available raw eFuse capacity: {available} bytes")
+    print(f"MAC to program: {format_mac(selected_mac)}")
+    if not assume_yes:
+        answer = input("This write is irreversible. Type FLASH to continue: ")
+        if answer != "FLASH":
+            fatal("cancelled without writing")
+
+    # Persist the allocation before the irreversible command. If power is lost
+    # during programming, this address remains unavailable to later cards.
+    reserve_mac(selected_mac)
+    response = ioctl_command(interface, "efuse_set wlfk2map")
+    if "WiFiwritemapcompareOK" not in compact(response):
+        fatal(f"eFuse write or driver readback failed: {response}")
+
+    readback = read_hardware_mac(interface)
+    if readback != selected_mac:
+        fatal(f"hardware MAC readback failed: read {format_mac(readback)}")
+    print("eFuse write and hardware readback succeeded.")
+    return selected_mac, True
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Flash an OpenHD RTL8812EU/RTL8822EU card with a unique persistent MAC."
+    )
+    parser.add_argument("interface", nargs="?", default="wlan1")
+    parser.add_argument("--mac", help="centrally allocated globally-administered unicast MAC")
+    parser.add_argument("--yes", action="store_true", help="skip the irreversible-write prompt")
+    parser.add_argument("--no-reload", action="store_true", help="require the module to already be in MP mode")
+    parser.add_argument("--map", dest="map_path", type=Path, default=DEFAULT_MAP, help=argparse.SUPPRESS)
+    parser.add_argument("--mask", dest="mask_path", type=Path, default=DEFAULT_MASK, help=argparse.SUPPRESS)
+    parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY, help=argparse.SUPPRESS)
+    args = parser.parse_args()
+
+    if os.geteuid() != 0:
+        fatal("run this tool as root")
+    ensure_private_file(args.map_path)
+    ensure_private_file(args.mask_path)
+
+    requested_mac = parse_mac(args.mac) if args.mac else None
+    if requested_mac is not None and not driver_accepts_mac(requested_mac):
+        fatal("the driver requires a globally-administered unicast MAC (both low bits of byte 0 must be zero)")
+
+    args.registry.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    registry_fd = os.open(args.registry, os.O_RDWR | os.O_CREAT, 0o600)
+    with os.fdopen(registry_fd, "r+", encoding="ascii") as registry:
+        fcntl.flock(registry, fcntl.LOCK_EX)
+        used = registry_addresses(registry)
+        selected_mac = requested_mac or allocate_mac(used)
+        if selected_mac in used:
+            fatal(f"MAC {format_mac(selected_mac)} is already present in {args.registry}")
+
+        interface = args.interface
+        restore_normal_mode = not args.no_reload
+        if not args.no_reload and not module_mp_enabled():
+            print(f"Reloading {MODULE} in MP mode...")
+            interface = reload_module(interface, mp_mode=True)
+        elif not Path(f"/sys/class/net/{interface}").exists():
+            interface = wait_for_interface(interface, timeout=2)
+
+        def reserve_mac(value):
+            registry.seek(0, os.SEEK_END)
+            registry.write(f"{format_mac(value)} {int(time.time())} reserved\n")
+            registry.flush()
+            os.fsync(registry.fileno())
+
+        try:
+            programmed_mac, wrote = provision(
+                interface,
+                args.map_path,
+                args.mask_path,
+                selected_mac,
+                args.yes,
+                reserve_mac,
+            )
+        finally:
+            if restore_normal_mode:
+                print(f"Reloading {MODULE} in normal mode...")
+                interface = reload_module(interface, mp_mode=False)
+
+        permanent = run(["ethtool", "-P", interface], check=False, capture=True)
+        if permanent.returncode == 0:
+            print(permanent.stdout.strip())
+        print(f"Provisioning complete on {interface}.")
+
+
+if __name__ == "__main__":
+    main()

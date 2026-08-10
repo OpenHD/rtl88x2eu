@@ -1159,6 +1159,9 @@ EXTRA_CFLAGS += -DCONFIG_EFUSE_CONFIG_FILE
 EXTRA_CFLAGS += -DEFUSE_MAP_PATH=\"/etc/wifi/wifi_efuse_$(MODULE_NAME).map\"
 EFUSE_MAP_INSTALL_DIR ?= /etc/wifi
 EFUSE_MAP_SRC ?= efuse/wifi_efuse_$(MODULE_NAME).map
+EFUSE_MASK_SRC ?= efuse/wifi_efuse_$(MODULE_NAME).mask
+EFUSE_TOOL_INSTALL_DIR ?= /usr/local/sbin
+EFUSE_TOOL_SRC ?= tools/openhd-efuse-flash
 
 #WIFIMAC_PATH
 USER_WIFIMAC_PATH ?=
@@ -2630,14 +2633,24 @@ strip:
 install:
 	install -p -m 644 $(MODULE_NAME).ko  $(MODDESTDIR)
 	@if [ -f "$(EFUSE_MAP_SRC)" ]; then \
-		install -d "$(EFUSE_MAP_INSTALL_DIR)"; \
-		install -p -m 644 "$(EFUSE_MAP_SRC)" "$(EFUSE_MAP_INSTALL_DIR)/wifi_efuse_$(MODULE_NAME).map"; \
+		install -d -m 755 "$(EFUSE_MAP_INSTALL_DIR)"; \
+		install -p -m 600 "$(EFUSE_MAP_SRC)" "$(EFUSE_MAP_INSTALL_DIR)/wifi_efuse_$(MODULE_NAME).map"; \
+	fi
+	@if [ -f "$(EFUSE_MASK_SRC)" ]; then \
+		install -d -m 755 "$(EFUSE_MAP_INSTALL_DIR)"; \
+		install -p -m 600 "$(EFUSE_MASK_SRC)" "$(EFUSE_MAP_INSTALL_DIR)/wifi_efuse_$(MODULE_NAME).mask"; \
+	fi
+	@if [ -f "$(EFUSE_TOOL_SRC)" ]; then \
+		install -d "$(EFUSE_TOOL_INSTALL_DIR)"; \
+		install -p -m 755 "$(EFUSE_TOOL_SRC)" "$(EFUSE_TOOL_INSTALL_DIR)/openhd-efuse-flash"; \
 	fi
 	/sbin/depmod -a ${KVER}
 
 uninstall:
 	rm -f $(MODDESTDIR)/$(MODULE_NAME).ko
 	rm -f $(EFUSE_MAP_INSTALL_DIR)/wifi_efuse_$(MODULE_NAME).map
+	rm -f $(EFUSE_MAP_INSTALL_DIR)/wifi_efuse_$(MODULE_NAME).mask
+	rm -f $(EFUSE_TOOL_INSTALL_DIR)/openhd-efuse-flash
 	/sbin/depmod -a ${KVER}
 
 modules_install:
