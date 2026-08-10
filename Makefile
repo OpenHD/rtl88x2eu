@@ -1161,7 +1161,9 @@ EFUSE_MAP_INSTALL_DIR ?= /etc/wifi
 EFUSE_MAP_SRC ?= efuse/wifi_efuse_$(MODULE_NAME).map
 EFUSE_MASK_SRC ?= efuse/wifi_efuse_$(MODULE_NAME).mask
 EFUSE_TOOL_INSTALL_DIR ?= /usr/local/sbin
-EFUSE_TOOL_SRC ?= tools/openhd-efuse-flash
+EFUSE_TOOL_SRC ?= tools/openhd_efuse_flash.cpp
+EFUSE_TOOL_BIN ?= tools/openhd-efuse-flash
+EFUSE_TOOL_CXX ?= $(CROSS_COMPILE)g++
 
 #WIFIMAC_PATH
 USER_WIFIMAC_PATH ?=
@@ -2630,7 +2632,12 @@ modules:
 strip:
 	$(CC_STRIP) $(MODULE_NAME).ko --strip-unneeded
 
-install:
+.PHONY: openhd-efuse-tool
+openhd-efuse-tool:
+	$(EFUSE_TOOL_CXX) -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+		-o "$(EFUSE_TOOL_BIN)" "$(EFUSE_TOOL_SRC)"
+
+install: openhd-efuse-tool
 	install -p -m 644 $(MODULE_NAME).ko  $(MODDESTDIR)
 	@if [ -f "$(EFUSE_MAP_SRC)" ]; then \
 		install -d -m 755 "$(EFUSE_MAP_INSTALL_DIR)"; \
@@ -2640,9 +2647,9 @@ install:
 		install -d -m 755 "$(EFUSE_MAP_INSTALL_DIR)"; \
 		install -p -m 600 "$(EFUSE_MASK_SRC)" "$(EFUSE_MAP_INSTALL_DIR)/wifi_efuse_$(MODULE_NAME).mask"; \
 	fi
-	@if [ -f "$(EFUSE_TOOL_SRC)" ]; then \
+	@if [ -f "$(EFUSE_TOOL_BIN)" ]; then \
 		install -d "$(EFUSE_TOOL_INSTALL_DIR)"; \
-		install -p -m 755 "$(EFUSE_TOOL_SRC)" "$(EFUSE_TOOL_INSTALL_DIR)/openhd-efuse-flash"; \
+		install -p -m 755 "$(EFUSE_TOOL_BIN)" "$(EFUSE_TOOL_INSTALL_DIR)/openhd-efuse-flash"; \
 	fi
 	/sbin/depmod -a ${KVER}
 

@@ -1,7 +1,8 @@
 # OpenHD eFuse provisioning tool
 
-`openhd-efuse-flash` provisions one RTL8812EU/RTL8822EU-family USB card with
-the OpenHD Wi-Fi map and a persistent MAC address:
+The native C++ `openhd-efuse-flash` utility provisions one
+RTL8812EU/RTL8822EU-family USB card with the OpenHD Wi-Fi map and a persistent
+MAC address:
 
 ```sh
 sudo openhd-efuse-flash wlan1
@@ -13,6 +14,10 @@ RTL8822E USB mask, asks for an irreversible-write confirmation, writes the
 eFuse, verifies the hardware readback, records the allocated MAC, and reloads
 the driver in normal mode. A card that already has a driver-valid permanent
 MAC is reported without another write.
+
+Connect exactly one supported Realtek card while provisioning. The utility
+tracks the card through its sysfs driver association, so it remains on the
+correct device if Linux renumbers `wlan0` and `wlan1` during module reloads.
 
 For unattended operation, add `--yes`. Production lines with more than one
 flashing host should allocate MAC addresses centrally and supply one with
@@ -26,3 +31,9 @@ repository and its history. Genuine confidentiality requires keeping the map
 and flashing fixture under trusted control.
 
 Do not interrupt power during the irreversible write.
+
+Build only the utility with:
+
+```sh
+make openhd-efuse-tool
+```
