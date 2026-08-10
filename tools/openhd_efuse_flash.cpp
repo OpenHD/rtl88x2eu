@@ -62,6 +62,7 @@ struct Options {
     bool no_reload = false;
     bool self_test = false;
     bool rf_test = false;
+    bool serial_only = false;
     unsigned bandwidth_mhz = 0;
     unsigned duration_seconds = 10;
     bool duration_set = false;
@@ -540,6 +541,45 @@ ProvisionResult provision(const std::string &interface, const std::string &map_p
     return {selected_mac, true};
 }
 
+bool update_usb_serial(const std::string &interface, bool assume_yes) {
+    std::string response = driver_command(interface, "mp_start");
+    if (lower(compact(response)).find("mp_startok") == std::string::npos)
+        fail("MP mode did not start: " + response);
+
+    const auto current = read_hardware_serial(interface);
+    if (current == kUsbSerial) {
+        std::cout << "USB serial is already 673643; nothing written.\n";
+        driver_command(interface, "mp_stop");
+        return false;
+    }
+    const unsigned available = available_raw_bytes(interface);
+    if (available < 32)
+        fail("only " + std::to_string(available) +
+             " raw eFuse bytes remain; refusing the serial update");
+
+    std::cout << "Interface: " << interface << '\n'
+              << "Available raw eFuse capacity: " << available << " bytes\n"
+              << "USB serial to program: 673643\n";
+    if (!assume_yes) {
+        std::cout << "This serial-only eFuse write is irreversible. "
+                     "Type SERIAL to continue: "
+                  << std::flush;
+        std::string answer;
+        std::getline(std::cin, answer);
+        if (answer != "SERIAL")
+            fail("cancelled without writing");
+    }
+
+    response = driver_command(interface, "efuse_set wmap,176,363733363433");
+    if (compact(response).find("WiFiwritemapcompareOK") == std::string::npos)
+        fail("USB serial eFuse write or driver comparison failed: " + response);
+    if (read_hardware_serial(interface) != kUsbSerial)
+        fail("hardware USB serial readback failed");
+    driver_command(interface, "mp_stop");
+    std::cout << "USB serial write and hardware readback succeeded.\n";
+    return true;
+}
+
 void check_mp_response(const std::string &command, const std::string &response) {
     const std::string normalized = lower(compact(response));
     if (normalized.find("error") != std::string::npos ||
@@ -616,11 +656,13 @@ void reserve_registry_mac(int registry_fd, const Mac &mac) {
 
 void print_help() {
     std::cout << "Usage: openhd-efuse-flash [interface] [--mac MAC] [--yes] [--no-reload]\n"
+                 "       openhd-efuse-flash [interface] --serial-only [--yes] [--no-reload]\n"
                  "       openhd-efuse-flash [interface] --rf-test [--bandwidth 20|40]\n\n"
                  "Flash an OpenHD RTL8812EU/RTL8822EU card with a unique persistent MAC.\n\n"
                  "  --mac MAC    use a centrally allocated globally-administered MAC\n"
                  "  --yes        skip the irreversible-write prompt\n"
                  "  --no-reload  require the driver to already be in MP mode\n"
+                 "  --serial-only  irreversibly set only the USB serial to 673643\n"
                  "  --rf-test    send a time-bounded maximum-index single-tone test signal\n"
                  "  --bandwidth  select 20 or 40 MHz; otherwise show an interactive menu\n"
                  "  --duration   RF test duration in seconds (default 10, maximum 300)\n";
@@ -642,6 +684,8 @@ Options parse_options(int argc, char **argv) {
             options.self_test = true;
         } else if (argument == "--rf-test") {
             options.rf_test = true;
+        } else if (argument == "--serial-only") {
+            options.serial_only = true;
         } else if (argument == "--mac" || argument == "--map" || argument == "--mask" ||
                    argument == "--registry" || argument == "--bandwidth" ||
                    argument == "--duration") {
@@ -679,6 +723,10 @@ Options parse_options(int argc, char **argv) {
         fail("--bandwidth and --duration require --rf-test");
     if (options.rf_test && options.requested_mac)
         fail("--mac cannot be combined with --rf-test");
+    if (options.serial_only && options.rf_test)
+        fail("--serial-only cannot be combined with --rf-test");
+    if (options.serial_only && options.requested_mac)
+        fail("--mac cannot be combined with --serial-only");
     return options;
 }
 
@@ -687,6 +735,8 @@ int self_test() {
     if (!driver_accepts_mac(mac) || driver_accepts_mac(parse_mac("02:E0:4C:12:34:56")))
         fail("MAC validation self-test failed");
     unsigned rmap_reads = 0;
+    unsigned serial_rmap_reads = 0;
+    bool serial_update_test = false;
     std::vector<std::string> events;
     command_hook = [&](const std::string &, const std::string &command) {
         events.push_back(command);
@@ -697,8 +747,11 @@ int self_test() {
             return rmap_reads == 1 ? std::string("0xFF 0xFF 0xFF 0xFF 0xFF 0xFF")
                                    : std::string("0x00 0xE0 0x4C 0x12 0x34 0x56");
         }
-        if (command.rfind("efuse_get rmap,176", 0) == 0)
+        if (command.rfind("efuse_get rmap,176", 0) == 0) {
+            if (serial_update_test && serial_rmap_reads++ == 0)
+                return std::string("0x31 0x32 0x33 0x34 0x35 0x36");
             return std::string("0x36 0x37 0x33 0x36 0x34 0x33");
+        }
         if (command == "efuse_get ableraw")
             return std::string("[ available raw size ] = 1 0 9 0 bytes");
         if (command.rfind("efuse_file ", 0) == 0)
@@ -712,6 +765,8 @@ int self_test() {
         if (command.rfind("efuse_get wlrfkrmap,176", 0) == 0)
             return std::string("0x36 0x37 0x33 0x36 0x34 0x33");
         if (command == "efuse_set wlfk2map")
+            return std::string("WiFi write map compare OK");
+        if (command == "efuse_set wmap,176,363733363433")
             return std::string("WiFi write map compare OK");
         if (command.rfind("mp_", 0) == 0)
             return std::string("OK");
@@ -733,6 +788,13 @@ int self_test() {
         serial_stage == events.end() || serial_readback == events.end() ||
         serial_readback <= write_command)
         fail("blank-card flow self-test failed");
+    events.clear();
+    serial_update_test = true;
+    if (!update_usb_serial("wlan1", true) ||
+        std::find(events.begin(), events.end(), "efuse_set wmap,176,363733363433") == events.end() ||
+        events.back() != "mp_stop")
+        fail("serial-only flow self-test failed");
+    serial_update_test = false;
     for (const unsigned bandwidth : {20U, 40U}) {
         events.clear();
         transmit_rf_test_signal("wlan1", bandwidth, 0);
@@ -757,6 +819,52 @@ int run(const Options &options) {
         return self_test();
     if (geteuid() != 0)
         fail("run this tool as root");
+
+    if (options.serial_only) {
+        create_directories(parent_path(options.registry_path), 0700);
+        const int lock_fd = open(options.registry_path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+        if (lock_fd < 0 || flock(lock_fd, LOCK_EX) != 0)
+            fail("cannot acquire the provisioning/serial-update lock");
+        std::string interface = options.interface;
+        const bool restore_normal = !options.no_reload;
+        bool normal_mode_restored = false;
+        try {
+            if (!options.no_reload && !module_mp_enabled()) {
+                std::cout << "Reloading " << kModule << " in MP mode...\n";
+                interface = reload_module(interface, true);
+            } else if (!file_exists("/sys/class/net/" + interface)) {
+                interface = wait_for_interface(interface, 2);
+            }
+            try {
+                update_usb_serial(interface, options.assume_yes);
+            } catch (...) {
+                try {
+                    driver_command(interface, "mp_stop");
+                } catch (const std::exception &error) {
+                    std::cerr << "warning: MP stop cleanup failed: " << error.what() << '\n';
+                }
+                throw;
+            }
+            if (restore_normal) {
+                std::cout << "Reloading " << kModule << " in normal mode...\n";
+                interface = reload_module(interface, false);
+                normal_mode_restored = true;
+            }
+        } catch (...) {
+            if (restore_normal && !normal_mode_restored) {
+                try {
+                    interface = reload_module(interface, false);
+                } catch (const std::exception &error) {
+                    std::cerr << "warning: failed to restore normal driver mode: " << error.what() << '\n';
+                }
+            }
+            close(lock_fd);
+            throw;
+        }
+        close(lock_fd);
+        std::cout << "Serial-only update complete on " << interface << ".\n";
+        return 0;
+    }
 
     if (options.rf_test) {
         const unsigned bandwidth = options.bandwidth_mhz ? options.bandwidth_mhz : select_bandwidth();

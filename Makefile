@@ -1164,7 +1164,7 @@ EFUSE_TOOL_INSTALL_DIR ?= /usr/local/sbin
 EFUSE_TOOL_SRC ?= tools/openhd_efuse_flash.cpp
 EFUSE_TOOL_BIN ?= tools/openhd-efuse-flash
 EFUSE_TOOL_CXX ?= $(CROSS_COMPILE)g++
-EFUSE_DEB_VERSION ?= 1.0.1
+EFUSE_DEB_VERSION ?= 1.0.2
 EFUSE_DEB_ARCH ?= $(shell dpkg --print-architecture 2>/dev/null)
 EFUSE_DEB_OUTPUT_DIR ?= dist
 

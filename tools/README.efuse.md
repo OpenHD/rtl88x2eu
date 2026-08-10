@@ -43,7 +43,7 @@ make openhd-efuse-deb
 Install the resulting package from `dist/`, then provision one connected card:
 
 ```sh
-sudo apt install ./openhd-efuse-flasher_1.0.1_armhf.deb
+sudo apt install ./openhd-efuse-flasher_1.0.2_armhf.deb
 sudo openhd-efuse-flash
 ```
 
@@ -57,6 +57,17 @@ Newly provisioned cards receive the fixed USB serial string `673643`. The
 utility verifies both the generated MAC and this serial directly from hardware
 after the write. Cards that already have a valid permanent MAC are left
 unchanged.
+
+To update only the USB serial on an already-provisioned card, without changing
+its MAC or other logical-map fields, run:
+
+```sh
+sudo openhd-efuse-flash --serial-only
+```
+
+This direct eFuse update is also irreversible. It requires typing `SERIAL`
+before writing unless `--yes` is supplied, and verifies the resulting serial
+from hardware before reporting success.
 
 ## RF test mode
 

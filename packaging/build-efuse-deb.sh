@@ -4,7 +4,7 @@ set -eu
 binary=
 map=
 mask=
-version=1.0.1
+version=1.0.2
 architecture=
 output_dir=dist
 
