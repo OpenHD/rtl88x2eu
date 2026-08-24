@@ -16,6 +16,17 @@
 #define __OSDEP_LINUX_SERVICE_H_
 
 #include <linux/version.h>
+#include <linux/timer.h>
+/* Kernel 6.15 renamed del_timer()/del_timer_sync() to timer_delete*() */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+#define del_timer(t)		timer_delete(t)
+#define del_timer_sync(t)	timer_delete_sync(t)
+#endif
+/* Kernel 6.16 replaced from_timer() with timer_container_of() */
+#ifndef from_timer
+#define from_timer(var, callback_timer, timer_fieldname) \
+	timer_container_of(var, callback_timer, timer_fieldname)
+#endif
 #include <linux/spinlock.h>
 #include <linux/compiler.h>
 #include <linux/kernel.h>
