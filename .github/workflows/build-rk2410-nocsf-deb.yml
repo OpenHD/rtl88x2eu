@@ -48,7 +48,7 @@ jobs:
         shell: bash
         env:
           PACKAGE_NAME: rtl88x2eu-ohd-rk2410-nocsf
-          MODULE_NAME: rtl88x2eu_ohd
+          MODULE_NAME: 88x2eu_ohd
         run: |
           sudo --preserve-env=GITHUB_SHA,KERNEL_VERSION,KERNEL_PACKAGE_VERSION,PACKAGE_NAME,PACKAGE_VERSION,MODULE_NAME \
             bash .github/scripts/build-rk2410-nocsf-deb.sh

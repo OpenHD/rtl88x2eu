@@ -85,8 +85,8 @@ jobs:
               ;;
             rtl88x2eu)
               DRIVER_PACKAGE="rtl88x2eu"
-              MODULE_NAME="rtl88x2eu_ohd"
-              USER_MODULE_NAME_VALUE="rtl88x2eu_ohd"
+              MODULE_NAME="88x2eu_ohd"
+              USER_MODULE_NAME_VALUE="88x2eu_ohd"
               ;;
             *)
               echo "Unsupported driver repo: ${GITHUB_REPOSITORY}" >&2
