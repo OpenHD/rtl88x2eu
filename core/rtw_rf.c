@@ -1377,7 +1377,8 @@ static const struct op_class_t global_op_class[] = {
 	OP_CLASS_ENT(126,	BAND_ON_5G,		OPC_BW40PLUS,	12,	149, 157, 165, 173, 181, 189, 197, 205, 213, 221, 237, 245),
 	OP_CLASS_ENT(127,	BAND_ON_5G,		OPC_BW40MINUS,	12,	153, 161, 169, 177, 185, 193, 201, 209, 217, 225, 241, 249),
 	/* 5G, 80M & 160M */
-	OP_CLASS_ENT(128,	BAND_ON_5G,		OPC_BW80,	53,	16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209, 213, 217, 221, 225),
+	/* No 80M segment contains ch 16 (the lowest unlocked one, centered on 26, is 20~32). */
+	OP_CLASS_ENT(128,	BAND_ON_5G,		OPC_BW80,	52,	20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209, 213, 217, 221, 225),
 	OP_CLASS_ENT(129,	BAND_ON_5G,		OPC_BW160,		24,	36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 149, 153, 157, 161, 165, 169, 173, 177),
 	#if 0 /* TODO */
 	/* 5G, 80+80M */
@@ -1575,7 +1576,7 @@ static bool dbg_global_op_class_validate(u8 gid)
 		}
 		if (k >= op_ch_num) {
 			RTW_ERR("%s can't get ch:%u from op_chs class:%u cch:%u\n"
-				, __func__, ch, global_op_class[i].class_id, cch);
+				, __func__, ch, global_op_class[gid].class_id, cch);
 			ret = 0;
 		}
 	}

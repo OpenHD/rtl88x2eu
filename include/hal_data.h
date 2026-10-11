@@ -570,6 +570,7 @@ typedef struct hal_com_data {
 	u8			INIDATA_RATE[MACID_NUM_SW_LIMIT];
 
 	struct dm_struct	 odmpriv;
+	struct wifi_only_cfg	wifionly_cfg;	/* this device's WiFi-only coex context */
 	u64			bk_rf_ability;
 	u8			bIQKInitialized;
 	u8			bNeedIQK;

@@ -1198,7 +1198,8 @@ int check_phy_efuse_tx_power_info_valid(_adapter *adapter)
 #endif /* CONFIG_EFUSE_CONFIG_FILE */
 
 #ifdef CONFIG_TXPWR_PG_WITH_PWR_IDX
-static u8 rtw_get_ch_group(u8 ch, u8 *group, u8 *cck_group)
+/* TX power PG group of a channel, or BAND_MAX if the efuse has no group for it (no warning). */
+static u8 rtw_lookup_ch_group(u8 ch, u8 *group, u8 *cck_group)
 {
 	BAND_TYPE band = BAND_MAX;
 	s8 gp = -1, cck_gp = -1;
@@ -1258,11 +1259,8 @@ static u8 rtw_get_ch_group(u8 ch, u8 *group, u8 *cck_group)
 			band = BAND_MAX;
 	}
 
-	if (band == BAND_MAX) {
-		RTW_WARN("%s invalid channel:%u", __func__, ch);
-		rtw_warn_on(1);
+	if (band == BAND_MAX)
 		goto exit;
-	}
 
 	if (group)
 		*group = gp;
@@ -1270,6 +1268,17 @@ static u8 rtw_get_ch_group(u8 ch, u8 *group, u8 *cck_group)
 		*cck_group = cck_gp;
 
 exit:
+	return band;
+}
+
+static u8 rtw_get_ch_group(u8 ch, u8 *group, u8 *cck_group)
+{
+	u8 band = rtw_lookup_ch_group(ch, group, cck_group);
+
+	if (band == BAND_MAX) {
+		RTW_WARN("%s invalid channel:%u", __func__, ch);
+		rtw_warn_on(1);
+	}
 	return band;
 }
 
@@ -1327,9 +1336,14 @@ bypass_2g:
 		if (!pwr_info_5g || !HAL_SPEC_CHK_RF_PATH_5G(hal_spec, rfpath))
 			goto bypass_5g;
 
-		/* 5G base */
+		/*
+		 * 5G base. The channel tables include the unlocked 5080~6165MHz channels (16~32,
+		 * 68~96, 181~251) that have no efuse TX power group; they keep base index 0 as
+		 * before. Look them up without rtw_get_ch_group()'s WARN_ON, which otherwise fired
+		 * 116 times (two RF paths) with a stack trace and a kernel taint on every probe.
+		 */
 		for (ch_idx = 0; ch_idx < CENTER_CH_5G_ALL_NUM; ch_idx++) {
-			if (rtw_get_ch_group(center_ch_5g_all[ch_idx], &group, NULL) != BAND_ON_5G)
+			if (rtw_lookup_ch_group(center_ch_5g_all[ch_idx], &group, NULL) != BAND_ON_5G)
 				continue;
 			hal_data->Index5G_BW40_Base[rfpath][ch_idx] = pwr_info_5g->IndexBW40_Base[rfpath][group];
 		}
@@ -1337,7 +1351,7 @@ bypass_2g:
 		for (ch_idx = 0 ; ch_idx < CENTER_CH_5G_80M_NUM; ch_idx++) {
 			u8 upper, lower;
 
-			if (rtw_get_ch_group(center_ch_5g_80m[ch_idx], &group, NULL) != BAND_ON_5G)
+			if (rtw_lookup_ch_group(center_ch_5g_80m[ch_idx], &group, NULL) != BAND_ON_5G)
 				continue;
 
 			upper = pwr_info_5g->IndexBW40_Base[rfpath][group];
